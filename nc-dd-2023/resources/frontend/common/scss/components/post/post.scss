@@ -1,0 +1,66 @@
+.post {
+    position: relative;
+
+    &.panel {
+        @include breakpoint-max(lg) {
+            margin-bottom: 0;
+        }
+    }
+
+    &__img-wrap {
+        padding-top: aspect-ratio(780, 525);
+        overflow: hidden;
+        border-radius: $border-radius;
+    }
+
+    &__title {
+        margin: $margin-small 0;
+    }
+}
+
+.date {
+    padding-bottom: 8px;
+    margin: 16px 0;
+    display: flex;
+    justify-content: flex-start;
+    position: relative;
+    color: $color-gray;
+    border-bottom: 2px solid #F4F4F4;
+
+    time {
+        display: inline-flex;
+        position: relative;
+
+        &::before {
+            content: '';
+            width: calc(100% + 30px) ;
+            height: 2px;
+            background-color: $color-purple;
+            position: absolute;
+            left: -30px;
+            bottom: -10px;
+        }
+    }
+
+    .icon {
+        margin-right: 8px;
+        stroke: $color-purple;
+    }
+}
+
+.date--compact {
+    padding: 0;
+    margin: 8px 0;
+    border: none;
+    font-size: 14px;
+
+    time::before,
+    &::before {
+        display: none;
+    }
+
+    .icon {
+        width: 16px;
+        height: 16px;
+    }
+}

@@ -1,0 +1,78 @@
+.banner {
+    width: 100%;
+    height: 240px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: $color-white;
+    color: $color-black;
+    box-shadow: $box-shadow;
+    border-radius: $border-radius;
+
+    &:hover {
+        color: $color-black;
+    }
+
+    &__content {
+        padding: $padding-large;
+        margin-right: $margin-small;
+        width: 65%;
+    }
+
+    &__title {
+        font-size: 32px;
+    }
+
+    &__slogan {
+        margin-top: $margin-small;
+    }
+
+    &__image {
+        padding: $padding-large;
+        width: 400px;
+        height: 100%;
+        flex-shrink: 0;
+
+        img {
+            width: 100%;
+            height: 100%;
+        }
+    }
+
+    @include breakpoint-max(xl) {
+        flex-direction: column-reverse;
+
+        &__content {
+            margin: 0;
+            padding: $padding-small;
+            width: 100%;
+            height: auto;
+        }
+
+        &__image {
+            padding: 8px;
+            width: 100%;
+            height: 120px;
+            overflow: hidden;
+            border-bottom: 1px solid $color-light-gray;
+
+            img {
+                object-fit: contain;
+                object-position: center;
+            }
+        }
+
+        &__slogan {
+            margin-top: 8px;
+            margin-bottom: 0;
+        }
+    }
+
+    @include breakpoint-max(2xl) {
+        height: auto;
+
+        &__title {
+            font-size: 26px;
+        }
+    }
+}

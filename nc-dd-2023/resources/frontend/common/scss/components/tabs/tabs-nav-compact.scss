@@ -1,0 +1,20 @@
+.tabs-nav-compact {
+    display: flex;
+    align-items: center;
+    margin-bottom: 16px;
+    border-bottom: 1px solid #E7E7E7;
+
+    &__item {
+        font-weight: 700;
+        user-select: none;
+        padding: 5px 8px;
+
+        &:hover,
+        &.is-active {
+            cursor: pointer;
+            margin-top: 2px;
+            color: $color-purple;
+            border-bottom: 2px solid $color-purple;
+        }
+    }
+}

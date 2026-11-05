@@ -1,0 +1,56 @@
+.tariff-nav {
+    width: 32%;
+    min-width: 280px;
+    margin: 0 auto $margin-large;
+    display: flex;
+    align-items: center;
+    box-shadow: $box-shadow;
+    border-radius: $border-radius;
+
+    &__btn {
+        position: relative;
+        padding: $padding-small;
+        font-size: 16px;
+        color: $color-purple;
+        font-weight: 700;
+        text-align: center;
+        background-color: #F3F2FD;
+        flex-grow: 1;
+
+        &:not(:last-child) {
+            border-right: 1px solid rgba($color-blue, .3);
+        }
+
+        &:first-child {
+            border-top-left-radius: $border-radius;
+            border-bottom-left-radius: $border-radius;
+        }
+
+        &:last-child {
+            border-top-right-radius: $border-radius;
+            border-bottom-right-radius: $border-radius;
+        }
+
+        &.is-active {
+            color: $color-white;
+            background-color: $color-blue;
+        }
+    }
+
+    &__badge {
+        position: absolute;
+        padding: 4px 8px;
+        color: $color-white;
+        top: -12px;
+        right: -6px;
+        font-size: 14px;
+        font-weight: 700;
+        background-color: $color-purple;
+        border-radius: 12px;
+        z-index: 1;
+    }
+
+    @include breakpoint-max(lg) {
+        width: 100%;
+    }
+}

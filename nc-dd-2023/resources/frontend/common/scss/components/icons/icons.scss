@@ -1,0 +1,43 @@
+.icon {
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    stroke: $color-black;
+    fill: none;
+    background: center / contain no-repeat;
+}
+
+.icon-wrap {
+    width: 42px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: $color-light-puprple;
+    border-radius: $border-radius;
+}
+
+.icon--size-sm {
+    width: 12px;
+    height: 12px;
+}
+
+.icon--size-md {
+    width: 16px;
+    height: 16px;
+}
+
+.icon--danger {
+    stroke: $color-danger;
+}
+
+.icon--success {
+    stroke: $color-success;
+}
+
+.icon--info {
+    stroke: $color-info;
+}

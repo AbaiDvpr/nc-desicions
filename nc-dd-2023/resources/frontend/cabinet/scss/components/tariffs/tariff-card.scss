@@ -1,0 +1,110 @@
+.tariff-card {
+    width: 400px;
+    padding: $padding-large;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    background-color: $color-white;
+    border-radius: $border-radius;
+    box-shadow: $box-shadow;
+    margin-bottom: $margin-small;
+
+    @include breakpoint-max(lg) {
+        width: 100%;
+    }
+
+    &__heading {
+        display: flex;
+        align-items: center;
+    }
+
+    &__img-wrap {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        margin-right: $margin-small;
+        width: 80px;
+        height: 80px;
+
+        @include breakpoint-max(lg) {
+            width: 64px;
+            height: 64px;
+        }
+
+        img {
+            max-width: 100%;
+            max-height: 100%;
+        }
+    }
+
+    &__name {
+        color: #342b70;
+        font-size: 32px;
+        word-break: break-word;
+
+        @include breakpoint-max(lg) {
+            font-size: 28px;
+        }
+    }
+
+    &__content {
+        margin-top: $margin-large;
+        position: relative;
+
+        li {
+            margin-bottom: 8px;
+            padding-left: 24px;
+            font-weight: 500;
+            position: relative;
+
+            &:before {
+                content: "";
+                height: 16px;
+                width: 16px;
+                position: absolute;
+                top: 3px;
+                left: 0;
+                background-image: url($path-image-icons + "icon-list-check.svg");
+                background-repeat: no-repeat;
+                background-size: contain;
+            }
+        }
+    }
+
+    &__cost-wrap {
+        display: inline-flex;
+        flex-direction: column;
+        align-self: center;
+    }
+
+    &__cost {
+        margin-top: $margin-small;
+        margin-bottom: auto;
+        font-size: 36px;
+        font-weight: 600;
+        text-align: center;
+    }
+
+    &__period {
+        font-size: 18px;
+        font-weight: 700;
+        text-align: right;
+    }
+
+    &__submit {
+        margin-top: $margin-small;
+    }
+
+    &--compact {
+        width: 100%;
+        padding: 0;
+        background: none;
+        border-radius: 0;
+        box-shadow: none;
+
+        .tariff-card__name {
+            font-size: 25px;
+        }
+    }
+}

@@ -1,0 +1,66 @@
+.callback {
+    @extend .section;
+
+    &__body {
+        width: 100%;
+        max-width: 992px;
+        margin-left: auto;
+        margin-right: auto;
+        display: flex;
+    }
+
+    &__form {
+        width: 100%;
+        padding: $padding-large;
+
+        &.is-success > *:not(.alert--success) {
+            display: none;
+        }
+    }
+
+    &__form-control {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    &__privacy {
+        display: flex;
+        align-items: center;
+    }
+
+    &__privacy-text {
+        display: block;
+        font-size: 14px;
+        margin-bottom: 2px;
+    }
+
+    &__form-recaptcha {
+        display: flex;
+        justify-content: flex-end;
+    }
+
+    &__form-submit {
+        margin-left: auto;
+    }
+
+    @include breakpoint-max(sm) {
+        &__form {
+            margin-bottom: $margin-small;
+            padding: $padding-small;
+        }
+
+        &__form-control {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        &__privacy-text {
+            margin-bottom: 16px;
+        }
+
+        &__form-submit {
+            width: 100%;
+        }
+    }
+}

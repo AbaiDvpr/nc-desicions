@@ -1,0 +1,279 @@
+button {
+    box-shadow: none;
+    border: none;
+    cursor: pointer;
+    background: none;
+    user-select: none;
+}
+
+.btn {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    padding: 18px 26px;
+    box-sizing: border-box;
+    position: relative;
+    font-family: inherit;
+    font-weight: 400;
+    font-size: 14px;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: center;
+    text-decoration: none;
+    transition: background-color .3s;
+    border-radius: $border-radius;
+    border: 1px solid transparent;
+
+    &[disabled],
+    &.is-disabled {
+        border-color: #CBD7D4;
+        background-color: #CBD7D4;
+        pointer-events: none;
+        color: #919795;
+    }
+
+    .icon {
+        stroke: $color-white;
+
+        &:not(:last-child) {
+            margin-right: 6px;
+        }
+    }
+
+    .loader {
+        display: none;
+    }
+
+    &.is-loading {
+        color: transparent !important;
+        pointer-events: none;
+
+        .loader {
+            display: block;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 24px;
+            height: 24px;
+            transform: translate(-50%, -50%);
+
+            &::before {
+                display: none;
+            }
+
+            &::after {
+                margin: 0;
+                width: 100%;
+                height: 100%;
+                border-width: 1px;
+                border-color: $color-white;
+            }
+        }
+
+        .icon {
+            opacity: 0;
+        }
+    }
+}
+
+.btn--primary {
+    background: $color-purple;
+    color: $color-white;
+    border: 1px solid $color-purple;
+
+    &:hover {
+        background-color: darken($color-purple, 5%);
+        color: $color-white;
+    }
+
+    &:active {
+        background-color: darken($color-purple, 7%);
+        color: $color-white;
+    }
+}
+
+.btn--danger {
+    color: $color-white;
+    background-color: $color-danger;
+    border-color: $color-danger;
+
+    &:hover {
+        color: $color-white;
+        background-color: darken($color-danger, 5%);
+    }
+
+    &:active {
+        color: $color-white;
+        background-color: darken($color-danger, 7%);
+    }
+}
+
+.btn--success {
+    color: $color-white;
+    background-color: $color-success;
+    border-color: $color-success;
+
+    &:hover {
+        color: $color-white;
+        background-color: darken($color-success, 5%);
+    }
+
+    &:active {
+        color: $color-white;
+        background-color: darken($color-success, 7%);
+    }
+}
+
+.btn--info {
+    color: $color-white;
+    background-color: $color-info;
+    border-color: $color-info;
+
+    &:hover {
+        color: $color-white;
+        background-color: darken($color-info, 5%);
+    }
+
+    &:active {
+        color: $color-white;
+        background-color: darken($color-info, 7%);
+    }
+}
+
+.btn--outline-primary {
+    border: 1px solid $color-purple;
+    background: none;
+    color: $color-purple;
+
+    &:hover {
+        background-color: $color-purple;
+        color: $color-white;
+    }
+
+    &:active {
+        background-color: darken($color-purple, 7%);
+        color: $color-white;
+    }
+}
+
+.btn--outline-danger {
+    border: 1px solid $color-danger;
+    background: none;
+    color: $color-danger;
+
+    &:hover {
+        background-color: $color-danger;
+        color: $color-white;
+    }
+
+    &:active {
+        background-color: darken($color-danger, 7%);
+        color: $color-white;
+    }
+}
+
+.btn--outline-info {
+    border: 1px solid $color-info;
+    background: none;
+    color: $color-info;
+
+    &:hover {
+        background-color: $color-info;
+        color: $color-white;
+    }
+
+    &:active {
+        background-color: darken($color-info, 7%);
+        color: $color-white;
+    }
+}
+
+.btn--outline-success {
+    border: 1px solid $color-success;
+    background: none;
+    color: $color-success;
+
+    &:hover {
+        background-color: $color-success;
+        color: $color-white;
+    }
+
+    &:active {
+        background-color: darken($color-success, 7%);
+        color: $color-white;
+    }
+}
+
+.btn--icon {
+    min-width: 48px;
+    min-height: 48px;
+    background-color: $color-light-puprple;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    background-repeat: no-repeat;
+    background-position: center;
+
+    &:hover {
+        background-color: darken($color-light-puprple, 7%);
+    }
+}
+
+.btn--size {
+    &-sm {
+        padding: 4px 8px;
+
+        .icon {
+            width: 20px;
+            height: 20px;
+        }
+    }
+
+    &-md {
+        padding: 8px 16px;
+
+        .icon {
+            width: 22px;
+            height: 22px;
+        }
+    }
+}
+
+.btn--w {
+    &-150 {
+        min-width: 150px;
+    }
+}
+
+.btn-group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+
+    &--no-wrap {
+        flex-wrap: nowrap;
+    }
+
+    &--start  {
+        justify-content: flex-start;
+    }
+
+    &--end  {
+        justify-content: flex-end;
+    }
+
+    &--center  {
+        justify-content: center;
+    }
+
+    &--beetween  {
+        justify-content: space-between;
+    }
+
+    &--around  {
+        justify-content: space-around;
+    }
+}

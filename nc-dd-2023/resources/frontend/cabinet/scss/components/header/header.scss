@@ -1,0 +1,51 @@
+.header {
+    padding: 0 $padding-large;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 66px;
+    position: sticky;
+    top: 0;
+    background-color: $color-white;
+    box-shadow: $box-shadow;
+    z-index: $z-index-fixed;
+
+    &__logo {
+        display: none;
+    }
+
+    @include breakpoint-max(lg) {
+        padding: 0 $padding-small;
+        justify-content: space-between;
+
+        &__logo {
+            display: flex;
+            flex-shrink: 0;
+        }
+    }
+
+    &__title {
+        display: flex;
+        color: $color-gray;
+        cursor: default;
+
+        .icon {
+            margin-right: 4px;
+            width: 22px;
+            height: 22px;
+            fill: $color-gray;
+            stroke: none;
+        }
+
+        @include breakpoint-max(lg) {
+            display: none;
+        }
+    }
+
+    &__interact {
+        display: flex;
+        align-items: center;
+        gap: 0 16px;
+    }
+}

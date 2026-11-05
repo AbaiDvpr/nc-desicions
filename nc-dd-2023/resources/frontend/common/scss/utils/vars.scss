@@ -1,0 +1,82 @@
+//General colors
+$color-black: #191B1A;
+$color-blue:  #1E194C;
+$color-dark-blue: #141629;
+$color-gray: #949494;
+$color-dark-grey: #95A3AC;
+$color-light-gray: #F9F9FB;
+$color-pastel-gray: #7B809A;
+$color-purple: #695BD6;
+$color-dark-purple: #1C2042;
+$color-light-puprple:#F3F2FD;
+$color-orange: #FF8855;
+$color-white: #ffffff;
+$color-dark-red: #BE0000;
+$color-success: #54AD97;
+$color-danger: #DF3131;
+$color-info: #3293A3;
+
+//General paddings
+$padding-tiny: 10px;
+$padding-small: 16px;
+$padding-large: 32px;
+$padding-largest: 50px;
+
+
+//General margins
+$margin-tiny: 10px;
+$margin-small: 16px;
+$margin-large: 32px;
+$margin-largest: 50px;
+
+
+
+//Container width
+$min-width: 320px;
+$max-width: 1200px;
+
+//Media breakpoints
+$breakpoints: (
+    sm:  576px,
+    md:  768px,
+    lg:  992px,
+    xl:  1200px,
+    2xl: 1440px,
+    3xl: 1840px
+);
+
+//Grid columns
+$columns: 12;
+
+//General layers
+$z-index-sticky:        1001;
+$z-index-fixed:         1003;
+$z-index-popup:         1002;
+$z-index-mobile-header: 1004;
+$z-index-dropdown:      1005;
+$z-index-modal:         1010;
+
+//Media paths
+$path-image: "static/images/common/";
+$path-image-icons: "/static/images/icons/";
+
+//Box-styles
+$box-shadow: 1px 1px 10px rgba(0, 0, 0, 0.1);
+$border-radius: 4px;
+
+//Font size
+$font-size-normal: 16px;
+$font-size-medium: 22px;
+$font-size-large: 48px;
+$font-size-largest: 62px;
+
+//Transitions
+$transition-fast: .3s;
+$transition-middle: .6s;
+$transition-slow: 1s;
+
+//Opacity
+$opacity-normal: 1;
+$opacity-light: .8;
+$opacity-middle: .5;
+$opacity-strong: .3;

@@ -1,0 +1,104 @@
+.form-group {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 16px;
+
+    &__input {
+        display: flex;
+        flex-direction: column;
+    }
+
+    &__label {
+        font-size: 14px;
+        font-weight: 700;
+        color: $color-dark-blue;
+        margin-bottom: 8px;
+
+        span {
+            vertical-align: middle;
+        }
+
+        @include breakpoint-max(lg) {
+            font-size: 14px;
+        }
+    }
+
+    &__hint {
+        width: 20px;
+        height: 20px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: 10px;
+        transition: $transition-fast;
+        cursor: pointer;
+        background-color: $color-purple;
+        border-radius: 50%;
+
+        .icon {
+            width: 16px;
+            height: 16px;
+            stroke: $color-white;
+        }
+
+        &:hover {
+            opacity: .65;
+        }
+    }
+
+    &__subtitle {
+        font-size: 14px;
+        color: $color-dark-grey;
+        margin-bottom: 8px;
+
+        &--mt {
+            margin-top: 8px;
+        }
+    }
+
+    .form-group__error {
+        color: $color-danger;
+        display: block;
+        font-size: 14px;
+    }
+
+    &.is-error {
+        .input,
+        .select,
+        .textarea,
+        .multiselect__tags,
+        .custom-select__head {
+            border-color: $color-danger;
+            background-color: #ffdbdb;
+        }
+    }
+}
+
+.form-group--lg {
+    .input {
+        font-size: 16px;
+        padding: 14px;
+    }
+
+    .select {
+        font-size: 16px;
+        padding: 14px 32px 14px 14px;
+    }
+
+    .form-group__label {
+        font-size: 16px;
+    }
+
+    .custom-select {
+        font-size: 16px;
+    }
+
+    .custom-select__head {
+        padding: 14px 32px 14px 14px;
+    }
+
+    .custom-select__body {
+        top: 52px;
+    }
+
+}

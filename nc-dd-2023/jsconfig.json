@@ -1,0 +1,13 @@
+{
+    "compilerOptions": {
+        "baseUrl": ".",
+        "paths": {
+            "@/*": [
+                "resources/frontend/cabinet/js/*"
+            ],
+            "@styles/*": [
+                "resources/frontend/cabinet/scss/*"
+            ]
+        }
+    }
+}

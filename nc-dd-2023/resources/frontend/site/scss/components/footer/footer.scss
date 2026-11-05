@@ -1,0 +1,22 @@
+.footer {
+    background-color: $color-dark-purple;
+    padding: $padding-large 0;
+
+    &__body {
+        display: flex;
+        align-items: center;
+        justify-content: space-around;
+
+        @include breakpoint-max(lg) {
+            flex-direction: column;
+        }
+    }
+
+    &__logo {
+        min-width: 150px;
+        @include breakpoint-max(lg) {
+            order: -1;
+            margin-bottom: 8px;
+        }
+    }
+}

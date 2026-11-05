@@ -1,0 +1,9 @@
+@import "node_modules/@coreui/coreui/scss/coreui";
+@import "~toastr/toastr";
+
+@import "~uppload/dist/uppload.css";
+@import "~uppload/dist/themes/light.css";
+
+#toast-container > div {
+    width: 400px;
+}

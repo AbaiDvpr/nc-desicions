@@ -1,0 +1,13 @@
+.badge {
+    padding: 2px 8px;
+    display: inline-flex;
+    font-size: 14px;
+    background-color: $color-purple;
+    color: $color-white;
+    border-radius: 12px;
+
+    &:hover,
+    &:focus {
+        color: $color-white;
+    }
+}

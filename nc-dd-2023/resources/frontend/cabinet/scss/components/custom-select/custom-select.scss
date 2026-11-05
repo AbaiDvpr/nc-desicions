@@ -1,0 +1,96 @@
+.custom-select {
+    position: relative;
+    font-size: 14px;
+
+    &.is-disabled {
+        pointer-events: none;
+        opacity: .5;
+        user-select: none;
+    }
+
+    &__head {
+        padding: 11px;
+        color: $color-dark-blue;
+        background-color: $color-light-gray;
+        border: 1px solid #E7E7E7;
+        cursor: pointer;
+
+        &::before {
+            content: '';
+            position: absolute;
+            right: 16px;
+            top: calc(50% - 2px);
+            background-image: url($path-image-icons + "icon-arrow.svg");
+            background-repeat: no-repeat;
+            width: 12px;
+            height: 7px;
+        }
+    }
+
+    &__text {
+        line-height: 1.143;
+        display: block;
+        width: calc(100% - 32px);
+    }
+
+    &__text--overflow {
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        overflow: hidden;
+    }
+
+    &__button-wrap {
+        .btn {
+            width: 100%;
+            border-radius: 0;
+        }
+    }
+
+    &__body {
+        position: absolute;
+        width: 100%;
+        left: 0;
+        top: 43px;
+        background-color: $color-light-puprple;
+        border: 1px solid #E7E7E7;
+        z-index: $z-index-modal;
+    }
+
+    &__input {
+        padding: 11px;
+        width: 100%;
+        background-color: $color-white;
+        outline: none;
+        border: none;
+    }
+
+    &__list {
+        @extend .scrollbar;
+        max-height: 200px;
+        overflow-y: auto;
+        overflow-x: hidden;
+        border-top: 1px solid #E7E7E7;
+        list-style: none;
+        margin: 0 -1px;
+    }
+
+    &__list-item {
+        color: $color-dark-blue;
+        padding: 9.5px $padding-small;
+        cursor: pointer;
+
+        &:hover,
+        &.is-marked {
+            background-color: $color-purple;
+            color: $color-white;
+        }
+    }
+
+    &__empty {
+        display: inline-block;
+        padding: 8px 16px;
+        width: 100%;
+        text-align: center;
+        color: $color-gray;
+    }
+}

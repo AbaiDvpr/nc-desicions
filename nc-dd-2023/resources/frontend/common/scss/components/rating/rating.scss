@@ -1,0 +1,43 @@
+.rating {
+    display: inline-flex;
+    align-items: center;
+
+    &.is-voted {
+        pointer-events: none;
+    }
+
+    &__stars {
+        display: inline-flex;
+        align-items: center;
+        justify-content: space-between;
+        position: relative;
+        flex-shrink: 0;
+    }
+
+    &__stars-fill {
+        width: 0;
+        height: 100%;
+        display: inline-flex;
+        align-items: center;
+        overflow: hidden;
+        position: absolute;
+        left: 0;
+        top: 0;
+    }
+
+    &__info {
+        margin-left: 4px;
+
+        span {
+            color: $color-gray;
+        }
+    }
+
+    .icon--star {
+        stroke: goldenrod;
+    }
+
+    .icon--star-solid {
+        fill: goldenrod;
+    }
+}

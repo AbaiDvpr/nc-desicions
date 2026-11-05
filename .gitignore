@@ -1,0 +1,17 @@
+# dependencies
+node_modules/
+.venv/
+venv/
+vendor/
+
+# python
+__pycache__/
+*.pyc
+
+# secrets
+.env
+.env.*
+!.env.example
+
+# os
+.DS_Store

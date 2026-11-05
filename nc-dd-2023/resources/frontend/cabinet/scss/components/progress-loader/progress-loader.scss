@@ -1,0 +1,32 @@
+.progress-loader {
+    width: 100%;
+    height: 3px;
+    position: fixed;
+    z-index: 9999;
+    top: 0;
+    left: 0;
+}
+
+.progress-loader__fill {
+    height: 100%;
+    width: 0;
+    background-color: $color-purple;
+
+    &.is-loading {
+        animation: progress-loader 1s ease-in-out forwards;
+    }
+
+    &.is-loaded {
+        width: 100%;
+    }
+}
+
+@keyframes progress-loader {
+    from {
+        width: 0;
+    }
+
+    to {
+        width: 95%;
+    }
+}

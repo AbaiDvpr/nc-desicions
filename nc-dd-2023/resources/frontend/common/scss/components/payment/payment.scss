@@ -1,0 +1,48 @@
+.payment {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: calc(100vh - 101px);
+    padding-top: 101px;
+}
+
+.payment-message {
+    @extend .panel;
+    padding: $padding-large;
+    max-width: 640px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+
+    &--progress {
+        .payment-message__title {
+            color: $color-info;
+        }
+    }
+
+    &--success {
+        .payment-message__title {
+            color: $color-success;
+        }
+    }
+
+    &--error {
+        .payment-message__title {
+            color: $color-dark-red;
+        }
+    }
+
+    &__subtitle {
+        margin-top: $margin-small;
+        margin-bottom: $margin-small;
+        text-align: center;
+    }
+
+    &__tariff {
+        font-weight: 600;
+        color: $color-purple;
+    }
+}
+

@@ -1,0 +1,82 @@
+.review {
+    @extend .section;
+}
+
+.review-card {
+    min-height: 334px;
+    display: flex;
+    flex-direction: column;
+    padding: 32px;
+    background-color: $color-white;
+    box-shadow: $box-shadow;
+    border-radius: $border-radius;
+    position: relative;
+    margin: 8px;
+    user-select: none;
+    cursor: grab;
+
+    &::before {
+        content: '';
+        width: 60px;
+        height: 60px;
+        position: absolute;
+        background-image: url("/static/images/common/review/review-item-quote.webp");
+        right: 32px;
+        top: 32px;
+        opacity: .5;
+    }
+
+    &__header {
+        display: flex;
+    }
+
+    &__avatar {
+        flex-shrink: 0;
+        width: 60px;
+        height: 60px;
+        overflow: hidden;
+        border-radius: 50%;
+
+        img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+    }
+
+    &__info {
+        margin-left: $margin-small;
+    }
+
+    &__title {
+        font-size: 16px;
+        font-weight: 700;
+    }
+
+    &__subtitle {
+        margin-top: 8px;
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    &__content {
+        margin-top: $margin-large;
+        font-size: 15px;
+        line-height: 1.2;
+        color: $color-gray;
+        user-select: none;
+    }
+}
+
+.review-slider {
+    &__item:nth-child(2n) {
+        .review-card {
+            color: $color-white;
+            background-color: $color-blue;
+        }
+
+        .review-card__content {
+            color: $color-white;
+        }
+    }
+}

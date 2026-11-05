@@ -1,0 +1,79 @@
+.notifier {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+
+    .icon {
+        width: 32px;
+        height: 32px;
+        stroke: $color-gray;
+    }
+
+    &__menu {
+        width: 300px;
+        position: absolute;
+        right: calc(100% - 48px);
+
+        @include breakpoint-max(md) {
+            left: -106px;
+        }
+    }
+
+    &__menu-item {
+        padding: $padding-small $padding-large $padding-small $padding-small;
+
+        &::before {
+            content: '';
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            position: absolute;
+            right: 16px;
+            top: calc(50% - 5px);
+        }
+
+        &.is-disabled {
+            opacity: .6;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        &.is-success::before {
+            background-color: $color-success;
+        }
+
+        &.is-danger::before {
+            background-color: $color-danger;
+        }
+
+        &.is-info::before {
+            background-color: $color-info;
+        }
+    }
+
+    &__bage {
+        position: relative;
+
+        &::before {
+            content: '';
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: $color-dark-red;
+            position: absolute;
+            right: 5px;
+            top: -11px;
+        }
+    }
+
+    &__text {
+        padding: $padding-small;
+        font-size: 14px;
+        color: $color-gray;
+
+        &--danger {
+            color: $color-danger;
+        }
+    }
+}

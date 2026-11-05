@@ -1,0 +1,68 @@
+.profile-avatar {
+    position: relative;
+
+    &__upload {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        transition: $transition-fast;
+        background-color: transparent;
+        opacity: 0;
+
+        .icon {
+            width: 32px;
+            height: 32px;
+            stroke: $color-blue;
+        }
+
+        > * {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        &:hover,
+        &.is-loading {
+            opacity: 1;
+            background-color: rgba($color-white, .6);
+        }
+
+        &.is-loading {
+            pointer-events: none;
+        }
+    }
+
+    &__upload-loader {
+        width: 40px;
+        height: 40px;
+
+        &::before {
+            display: none;
+        }
+
+        &::after {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            border-width: 3px;
+        }
+    }
+
+    &__image {
+        display: block;
+        width: 260px;
+        height: 260px;
+        object-fit: cover;
+        background-color: #efefef;
+    }
+
+    @include breakpoint-max(lg) {
+        &__image {
+            width: 100%;
+            height: auto;
+        }
+    }
+}

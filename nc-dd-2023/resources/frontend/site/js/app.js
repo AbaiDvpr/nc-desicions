@@ -1,0 +1,9 @@
+require('./modules/preloader.js');
+require('./modules/header.js');
+require('./modules/slider.js');
+require('./modules/cookie-alert.js');
+require('./modules/modal.js');
+require('./modules/maska.js');
+require('./modules/faq.js');
+require('./modules/feedback.js');
+require('./modules/prices.js');

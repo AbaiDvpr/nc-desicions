@@ -1,0 +1,154 @@
+.prices {
+    @extend .section;
+    color: $color-black;
+
+    &__body {
+        display: flex;
+        flex-direction: column;
+    }
+
+    &__list {
+        margin: 8px;
+        display: flex;
+        justify-content: center;
+    }
+
+    &__list--annual {
+        .prices__item-period {
+            width: 100%;
+            display: block;
+            font-size: 28px;
+            text-align: right;
+        }
+    }
+
+    &__item-wrap {
+        display: flex;
+        flex-direction: column;
+    }
+
+    &__item {
+        width: calc(100% - 16px);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 64px 32px 32px;
+        background-color: $color-white;
+        border-radius: $border-radius;
+        box-shadow: $box-shadow;
+        overflow: hidden;
+        user-select: none;
+
+        li {
+            position: relative;
+            padding-left: $margin-large;
+            font-size: $font-size-normal;
+
+            &:not(:last-child) {
+                margin-bottom: 8px;
+            }
+
+            &::before {
+                content: '';
+                position: absolute;
+                width: 20px;
+                height: 20px;
+                background-image: url($path-image-icons + "icon-list-check.svg");
+                background-repeat: no-repeat;
+                background-size: contain;
+                left: 0;
+                top: 3px;
+            }
+        }
+    }
+
+    &__item-img {
+        width: 100px;
+        height: 100px;
+    }
+
+    &__item-title {
+        font-size: 42px;
+        font-weight: 700;
+        color: lighten($color-blue, 7);
+        margin-top: $margin-small;
+    }
+
+    &__item-cost {
+        color: $color-black;
+        font-size: 56px;
+        margin-top: $margin-small;
+    }
+
+    &__item-period {
+        display: none;
+    }
+
+    &__item-content {
+        margin-top: $margin-small;
+        margin-bottom: $margin-large;
+    }
+
+    &__item--dark {
+        background-color: $color-dark-blue;
+
+        .prices__item-title,
+        .prices__item-cost,
+        .prices__item-period,
+        .prices__item-list-item,
+        .prices__benefit,
+        li {
+            color: white;
+        }
+
+        .prices__item-old-cost {
+            color: $color-white;
+        }
+
+        li::before {
+            content: '';
+            background-image: url($path-image-icons + "icon-list-check-white.svg");
+        }
+
+        .prices__item-img {
+            filter: invert(99%) sepia(99%) saturate(10%) hue-rotate(239deg) brightness(104%) contrast(100%);
+        }
+
+        .btn {
+            @extend .btn--primary;
+        }
+    }
+
+    @include breakpoint-max(xl) {
+        &__toggle {
+            width: 100%;
+        }
+
+        &__item {
+            padding: 32px 16px;
+
+            li {
+                font-size: $font-size-normal;
+
+                &::before {
+                    width: 18px;
+                    height: 18px;
+                    left: 0;
+                }
+            }
+        }
+
+        &__item-img {
+            width: 74px;
+            height: 74px;
+        }
+
+        &__item-title {
+            font-size: 36px;
+        }
+
+        &__item-cost {
+            font-size: 48px;
+        }
+    }
+}

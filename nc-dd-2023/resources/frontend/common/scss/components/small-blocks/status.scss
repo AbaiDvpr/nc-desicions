@@ -1,0 +1,19 @@
+.status {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: flex;
+    flex-shrink: 0;
+    margin-right: 8px;
+
+    &--done {
+        background-color: #54AD97;
+    }
+
+    &--progress {
+        background-color: #695BD6;
+    }
+}
+
+
+

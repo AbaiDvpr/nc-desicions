@@ -1,0 +1,239 @@
+.stepper {
+    &__header {
+        padding: $padding-large;
+        background-color: $color-white;
+        box-shadow: $box-shadow;
+        border-radius: $border-radius;
+        margin-bottom: $margin-large;
+
+        @include breakpoint-max(lg) {
+            margin-bottom: $margin-small;
+            padding: $padding-small;
+        }
+    }
+
+    &__progress {
+        display: flex;
+        gap: 32px;
+
+        li {
+            width: 25%;
+        }
+
+        @include breakpoint-max(lg) {
+            gap: 8px;
+        }
+    }
+
+    &__progress-item {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        user-select: none;
+        cursor: pointer;
+
+        @include breakpoint-max(lg) {
+            align-items: center;
+        }
+    }
+
+    &__progress-head {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        gap: 32px;
+
+        @include breakpoint-max(sm) {
+            gap: 8px;
+            justify-content: center;
+        }
+    }
+
+    &__progress-point {
+        width: 48px;
+        height: 48px;
+        display: flex;
+        flex-shrink: 0;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background-color: $color-purple;
+
+        .icon {
+            stroke: $color-white;
+        }
+
+        @include breakpoint-max(sm) {
+            width: 38px;
+            height: 38px;
+        }
+    }
+
+    &__progress-line {
+        display: flex;
+        width: 100%;
+        height: 5px;
+        background-color: $color-purple;
+
+        @include breakpoint-max(sm) {
+            display: none;
+        }
+    }
+
+    &__progress-body {
+        display: flex;
+        align-items: center;
+        gap: 16px 8px;
+        margin-top: $margin-small;
+    }
+
+    &__progress-title {
+        font-weight: bold;
+        color: $color-black
+    }
+
+    &__progress-status {
+        padding: 2px 16px;
+        border-radius: 40px;
+        background: #F3F2FD;
+        color: $color-purple;
+
+        @include breakpoint-max(xl) {
+            display: none;
+        }
+    }
+
+    &__progress-item.is-disabled {
+        pointer-events: none;
+
+        .stepper__progress-point,
+        .stepper__progress-line  {
+            background-color: #95A3AC;
+        }
+
+        .stepper__progress-title {
+            color: #95A3AC;
+        }
+
+        .stepper__progress-status {
+            background-color: #95A3AC;
+            color: $color-white;
+        }
+    }
+
+    &__progress-item.is-active {
+        .icon {
+            stroke: $color-purple;
+        }
+
+        .stepper__progress-point {
+            background: $color-white;
+            border: 1px solid $color-purple;
+        }
+
+        .stepper__progress-line  {
+            background-color:  $color-purple;
+            position: relative;
+
+            &:before {
+                content: '';
+                width: 50%;
+                height: 5px;
+                background-color: #F2FBFD;
+                position: absolute;
+                right: 0;
+                top: 0;
+            }
+        }
+
+        .stepper__progress-title {
+            color:  $color-black;
+        }
+
+        .stepper__progress-status {
+            background-color: #F2FBFD;
+            color: #5B82D6;
+        }
+    }
+
+    &__item {
+        display: flex;
+        flex-direction: column;
+
+        &__body {
+            display: flex;
+            flex-wrap: wrap;
+        }
+    }
+
+    &__title {
+        font-size: 20px;
+        font-weight: 400;
+        display: flex;
+        align-items: center;
+        margin-bottom: $margin-small;
+    }
+
+    &__subtitle {
+        font-size: 14px;
+        color: $color-dark-grey;
+    }
+
+    &__body {
+        padding: $padding-large;
+        background-color: $color-white;
+        box-shadow: $box-shadow;
+        border-radius: $border-radius;
+
+        @include breakpoint-max(lg) {
+            padding: 8px;
+        }
+    }
+
+    &__footer {
+        margin-top: $margin-large;
+        display: flex;
+        gap: 16px;
+    }
+
+    &__footer--between {
+        justify-content: space-between;
+    }
+
+    &__footer--end {
+        justify-content: flex-end;
+    }
+
+    &__delimeter {
+        display: flex;
+        border-bottom: 1px solid $color-dark-blue;
+        font-size: $font-size-normal;
+        font-weight: bold;
+    }
+
+    .wrap {
+        margin-bottom: $margin-small;
+
+        &--bg {
+            padding: $padding-small;
+            border-radius:$border-radius;
+            background-color: rgb($color-light-puprple, .7) ;
+        }
+    }
+
+    // TODO Переписать на классы
+    select,
+    input {
+        width: 100%;
+        min-width: 90px;
+    }
+
+    td input[type=checkbox]  {
+        min-width: 15px;
+        width: 100%;
+    }
+
+    .form-group__label input[type=checkbox] {
+        min-width: 15px;
+    }
+}

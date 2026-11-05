@@ -1,0 +1,34 @@
+.course-info {
+    margin-bottom: $margin-small;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    line-height: 1;
+
+    &__author a {
+        font-weight: 700;
+    }
+
+    &__rating {
+        display: flex;
+        align-items: flex-end;
+        line-height: 1;
+
+        .icon {
+            margin-right: 4px;
+            stroke: goldenrod;
+            fill: goldenrod;
+        }
+    }
+
+    &__level,
+    &__students {
+        display: flex;
+        align-items: flex-end;
+
+        .icon {
+            margin-right: 4px;
+            stroke: $color-purple;
+        }
+    }
+}

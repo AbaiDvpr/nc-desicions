@@ -1,0 +1,140 @@
+.header {
+    width: 100%;
+    position: sticky;
+    top: 0;
+    left: 0;
+    z-index: $z-index-fixed;
+    background-color: $color-dark-purple;
+
+    &__body {
+        display: flex;
+        align-items: center;
+        padding: $padding-small 0;
+    }
+
+    &__logo {
+        display: flex;
+        flex-shrink: 0;
+    }
+
+    &__menu {
+        display: flex;
+        align-items: center;
+        margin-left: auto;
+    }
+
+    &__list {
+        display: flex;
+        align-items: center;
+        gap: 40px;
+    }
+
+    &__list--login {
+        margin-left: 40px;
+    }
+
+    &__link {
+        color: $color-white;
+        font-size: $font-size-normal;
+
+        &:hover {
+            color: $color-purple
+        }
+    }
+
+    @include breakpoint-max(lg) {
+        &::before {
+            z-index: $z-index-fixed;
+        }
+
+        &__logo {
+            z-index: $z-index-mobile-header;
+        }
+
+        &__menu {
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            z-index: $z-index-fixed;
+            left: 0;
+            top: -100%;
+            padding-top: 80px;
+            padding-bottom: 80px;
+            width: 100%;
+            height: 100%;
+            background-color: lighten($color-dark-purple, 10%);
+            overflow: auto;
+            opacity: 0;
+            transition: $transition-fast;
+
+            &.is-active {
+                top: 0;
+                opacity: 1;
+            }
+        }
+
+        &__list {
+            width: 100%;
+            flex-direction: column;
+        }
+
+        &__link {
+            font-size: $font-size-medium;
+        }
+
+        &__list--login {
+            display: flex;
+            justify-content: flex-end;
+            margin-left: auto;
+            flex-direction: row;
+            gap: 16px;
+
+            .header__link {
+                font-size: 16px;
+            }
+        }
+    }
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+
+    &__picture {
+        display: block;
+        width: 52px;
+        height: 52px;
+        overflow: hidden;
+        border-radius: 50%;
+        border: 2px solid $color-purple;
+        transition: opacity $transition-fast;
+        object-fit: cover;
+
+        &:hover {
+            opacity: $opacity-light;
+            transition: opacity $transition-fast;
+        }
+    }
+
+    &__name {
+        color: $color-purple;
+        padding: 0 $padding-small;
+
+        &:hover {
+            color: lighten($color-purple, 5%);
+        }
+    }
+
+    @include breakpoint-max(lg) {
+        &__picture {
+            width: 32px;
+            height: 32px;
+        }
+
+        &__name {
+            padding: 0 $padding-small;
+            color: $color-white;
+            font-size: 16px;
+        }
+    }
+}

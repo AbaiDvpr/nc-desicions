@@ -1,0 +1,68 @@
+@import "containers";
+@import "panel";
+@import "formatted";
+@import "title";
+@import "spacing";
+@import "bg";
+@import "status";
+@import "scrollbar";
+@import "color";
+@import "border";
+
+.w-100 {
+    width: 100%;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.text-left {
+    text-align: left;
+}
+
+.text-right {
+    text-align: right;
+}
+
+.fw-600 {
+    font-weight: 600;
+}
+
+.fw-700 {
+    font-weight: 700;
+}
+
+.ratio {
+    display: block;
+    position: relative;
+    background-color: $color-light-gray;
+    overflow: hidden;
+
+    > *:not(.icon) {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+    }
+
+    img:not(.icon) {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+
+        &:not([src]) {
+            visibility: hidden;
+        }
+    }
+
+    iframe {
+        width: 100%;
+        height: 100%;
+    }
+}
+
+.overflow-hidden {
+    overflow: hidden;
+}

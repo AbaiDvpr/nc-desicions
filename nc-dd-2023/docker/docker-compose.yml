@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  desktop:
+    image: arrim/basephp:81m
+    volumes:
+      - ../:/srv/www
+      - /tmp/:/tmp
+      - ./dev/nginx/mono.conf:/etc/nginx/http.d/default.conf
+      - ./dev/config/php-fpm/mono.conf:/etc/php81/php-fpm.d/mono.conf
+      - ./dev/supervisord.conf:/etc/supervisord.conf
+    ports:
+      - "127.0.0.1:8000:80"
+    environment:
+      - APP_PROJECT=desktop
+
+  api:
+    image: arrim/basephp:81m
+    volumes:
+      - ../:/srv/www
+      - /tmp/:/tmp
+      - ./dev/nginx/mono.conf:/etc/nginx/http.d/default.conf
+      - ./dev/config/php-fpm/mono.conf:/etc/php81/php-fpm.d/mono.conf
+      - ./dev/supervisord.conf:/etc/supervisord.conf
+    ports:
+      - "127.0.0.1:8001:80"
+    environment:
+      - APP_PROJECT=api
+
+  admin:
+    image: arrim/basephp:81m
+    volumes:
+      - ../:/srv/www
+      - /tmp/:/tmp
+      - ./dev/nginx/mono.conf:/etc/nginx/http.d/default.conf
+      - ./dev/config/php-fpm/mono.conf:/etc/php81/php-fpm.d/mono.conf
+      - ./dev/supervisord.conf:/etc/supervisord.conf
+    environment:
+      - APP_PROJECT=admin
+    ports:
+      - "127.0.0.1:8002:80"
+
+# Использовать при разработке локальной на компе
+#  redis:
+#    hostname: redis
+#    image: redis:6.0.9-alpine
+#  mysql:
+#    hostname: mysql
+#    image: mysql:8.0.22
+#    environment:
+#      MYSQL_ROOT_PASSWORD: root
+#      MYSQL_DATABASE: database
+#      MYSQL_USER: user
+#      MYSQL_PASSWORD: password
+#    volumes:
+#      - ./dev/mysql:/var/lib/mysql
+#    ports:
+#      - "3306:3306"
+#  mongo:
+#    hostname: mongo
+#    image: mongo:6.0
+#    volumes:
+#      - ./dev/mongo:/data/db
+#    ports:
+#      - "27017:27017"

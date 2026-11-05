@@ -1,0 +1,109 @@
+.company-nav {
+    padding-top: 36px;
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: $margin-small;
+}
+
+.company-nav-item {
+    margin-bottom: $margin-small;
+    min-height: 94px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    flex-shrink: 0;
+    position: relative;
+    cursor: pointer;
+    transition: transform $transition-fast;
+
+    &:hover {
+        transition: transform $transition-fast;
+        transform: translateY(-5px);
+    }
+
+    &.is-disabled {
+        opacity: .6;
+        filter: grayscale(100);
+        pointer-events: none;
+
+        &:hover {
+            transform: translateY(0);
+        }
+    }
+
+    @include breakpoint-max(md) {
+        width: 100%;
+    }
+
+    @include breakpoint-min(md) {
+        width: calc(50% - 8px);
+    }
+
+    @include breakpoint-min(2xl) {
+        width: calc((100% / 5) - 16px);
+    }
+
+    &__icon-wrap {
+        position: absolute;
+        right: 16px;
+        top: -20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 60px;
+        height: 60px;
+        border-radius: $border-radius;
+        background-color: $color-purple;
+        box-shadow: 0px 4px 4px 1px rgb(105 91 214 / 53%);
+
+        .icon {
+            width: 32px;
+            height: 32px;
+            stroke: $color-white;
+        }
+    }
+
+    &__title {
+        padding-right: $padding-large;
+        width: 77%;
+        display: flex;
+        color: #7B809A;
+        font-size: 14px;
+        font-weight: 600;
+        text-transform: uppercase;
+
+        @include breakpoint-max(md) {
+            font-size: $font-size-normal;
+        }
+    }
+
+    &--primary {
+        .company-nav-item__icon-wrap {
+            background-color: $color-purple;
+            box-shadow: 0px 4px 4px 1px rgb(105 91 214 / 53%);
+        }
+    }
+
+    &--danger {
+        .company-nav-item__icon-wrap {
+            background-color: $color-danger;
+            box-shadow: 0px 4px 4px 1px rgb(223 49 49 / 53%);
+        }
+    }
+
+    &--success {
+        .company-nav-item__icon-wrap {
+            background-color: $color-success;
+            box-shadow: 0px 4px 4px 1px rgb(84 173 151 / 53%);
+        }
+    }
+
+    &--info {
+        .company-nav-item__icon-wrap {
+            background-color: $color-info;
+            box-shadow: 0px 4px 4px 1px rgb(50 147 163 / 53%);
+        }
+    }
+}

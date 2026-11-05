@@ -1,0 +1,200 @@
+/* Utils */
+@import "resources/frontend/common/scss/utils/vars.scss";
+@import "resources/frontend/common/scss/utils/media-breackpoints.scss";
+
+/* Vendor */
+@import "resources/frontend/common/scss/vendor/notyf/notyf";
+@import "vendor/vue-multiselect/vue-multiselect";
+@import "vendor/vue-datepicker/vue-datepicker";
+@import "vendor/vue-apexcharts/vue-apexcharts";
+@import "vendor/full-calendar/full-calendar";
+
+/* General styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+
+    &::before,
+    &::after {
+        box-sizing: border-box;
+    }
+}
+
+.hidden {
+    display: none !important;
+}
+
+.hidden-lg {
+    display: none !important;
+
+    @include breakpoint-max(md) {
+        display: flex;
+    }
+}
+
+img {
+    height: auto;
+    max-width: 100%;
+    font-style: italic;
+
+    &:not([src]):not([srcset]) {
+        visibility: hidden;
+    }
+}
+
+.img-responsive {
+    width: 100%;
+    height: auto;
+}
+
+table img {
+    max-width: none;
+}
+
+ul li {
+    list-style: none;
+}
+
+a {
+    color: $color-purple;
+    text-decoration: none;
+    transition: color $transition-fast;
+
+    &:hover,
+    &:focus {
+        color: lighten($color-purple, 5%);
+    }
+
+    &.btn {
+        color: $color-white;
+    }
+}
+
+p {
+    margin-bottom: 12px;
+}
+
+svg {
+    width: 1em;
+    height: 1em;
+    fill: currentColor;
+    pointer-events: none;
+}
+
+html,
+body {
+    min-height: 100vh;
+}
+
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    color: $color-black;
+    line-height: 1.5;
+
+    &.blocker {
+        overflow: hidden;
+    }
+}
+
+.app {
+    display: flex;
+    flex-direction: row;
+
+    &__content {
+        display: flex;
+        flex-direction: column;
+        margin-left: auto;
+        background-color: $color-light-gray;
+        position: relative;
+
+        @include breakpoint-min(lg) {
+            width: calc(100% - 300px);
+
+            .nav.is-compact + & {
+                width: calc(100% - 64px);
+            }
+        }
+
+        @include breakpoint-min(3xl) {
+            width: calc(100% - 345px);
+        }
+
+        @include breakpoint-max(lg) {
+            margin-left: 0;
+            width: 100%;
+        }
+    }
+}
+
+.main {
+    margin-bottom: $margin-large;
+    padding: 0 $padding-large;
+    min-height: calc(100vh - 98px);
+
+    @include breakpoint-max(2xl) {
+        padding: 0 $padding-small;
+    }
+}
+
+.section-title {
+    padding: $margin-small 0;
+
+    @include breakpoint-max(md) {
+        font-size: 24px;
+    }
+}
+
+.sorry {
+    display: none;
+}
+
+/* Components */
+
+@import "resources/frontend/common/scss/components/icons/icons";
+@import "resources/frontend/common/scss/components/btn/btn";
+@import "resources/frontend/common/scss/components/dropdown/dropdown";
+@import "resources/frontend/common/scss/components/lang-switcher/lang-switcher";
+@import "resources/frontend/common/scss/components/notifer/notifer";
+@import "resources/frontend/common/scss/components/project-card/project-card";
+@import "resources/frontend/common/scss/components/user-dropdown/user-dropdown";
+@import "resources/frontend/common/scss/components/badge/badge";
+@import "resources/frontend/common/scss/components/burger/burger";
+@import "resources/frontend/common/scss/components/alerts/alerts";
+@import "resources/frontend/common/scss/components/loader/loader";
+@import "resources/frontend/common/scss/components/grid/grid";
+@import "resources/frontend/common/scss/components/table/table";
+@import "resources/frontend/common/scss/components/form/form";
+@import "resources/frontend/common/scss/components/modal/modal";
+@import "resources/frontend/common/scss/components/side-popup/side-popup";
+@import "resources/frontend/common/scss/components/small-blocks/small-blocks";
+@import "resources/frontend/common/scss/components/tabs/tabs";
+@import "resources/frontend/common/scss/components/admin-bar/admin-bar";
+@import "resources/frontend/common/scss/components/tariff-nav/tariff-nav";
+@import "resources/frontend/common/scss/components/banner/banner";
+@import "resources/frontend/common/scss/components/rating/rating";
+@import "resources/frontend/common/scss/utils/functions.scss";
+
+@import "components/custom-select/custom-select";
+@import "components/custom-table/custom-table";
+@import "components/currency/currency";
+@import "components/skeleton/skeleton";
+@import "components/header/header";
+@import "components/nav/nav";
+@import "components/welcome/welcome";
+@import "components/profile/profile";
+@import "components/projects/projects";
+@import "components/stepper/stepper";
+@import "components/about/about";
+@import "components/tariffs/tariffs";
+@import "components/tariff/tariff";
+@import "components/course/course";
+@import "components/filter/filter";
+@import "components/company/company";
+@import "components/widget/widget";
+@import "components/not-found/not-found";
+@import "components/progress-loader/progress-loader";
+
+
+
+

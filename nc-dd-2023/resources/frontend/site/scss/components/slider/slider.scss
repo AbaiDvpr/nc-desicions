@@ -1,0 +1,52 @@
+.slider {
+    position: relative;
+
+    &__nav {
+        display: flex;
+        justify-content: space-between;
+        width: 100%;
+        position: absolute;
+        top: calc(50% - 19px);
+
+        @include breakpoint-max(md) {
+            display: none;
+        }
+    }
+
+    &__nav-next,
+    &__nav-prev {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        font-size: 18px;
+        position: absolute;
+        opacity: .7;
+
+        &:hover {
+            transition: opacity $transition-fast;
+            opacity: 1;
+        }
+    }
+
+    &__nav-next {
+        border: 2px solid $color-purple;
+        background-color: $color-purple;
+        right: -22px;
+
+        .icon {
+            stroke: $color-white;
+        }
+    }
+
+    &__nav-prev {
+        border: 2px solid $color-gray;
+        left: -22px;
+
+        .icon {
+            stroke: $color-gray;
+        }
+    }
+}

@@ -1,0 +1,52 @@
+.project-card {
+    padding: $padding-small;
+    background-color: $color-white;
+    box-shadow: $box-shadow;
+    border-radius: $border-radius;
+
+    &__title,
+    &__text {
+        display: flex;
+        align-items: center;
+        font-size: 14px;
+    }
+
+    &__controls {
+        display: flex;
+        gap: 8px;
+
+        .btn, li {
+            display: flex;
+            flex-grow: 1;
+        }
+    }
+
+    .row {
+        align-items: center;
+    }
+
+    @include breakpoint-min(xl) {
+        width: 48.8%;
+    }
+
+    @include breakpoint-min(2xl) {
+        width: 100%;
+    }
+
+    @include breakpoint-max(2xl) {
+        &__title {
+            padding-bottom: 8px;
+            margin-bottom: 8px;
+            border-bottom: 1px solid rgb($color-dark-grey, 0.3);
+        }
+
+        &__text {
+            padding-left: $padding-small;
+            color: $color-dark-grey;
+        }
+
+        &__controls {
+            margin-top: $margin-small;
+        }
+    }
+}

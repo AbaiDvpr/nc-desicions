@@ -1,0 +1,190 @@
+.input,
+.select,
+.textarea {
+    width: 100%;
+    padding: 11px;
+    color: $color-blue;
+    font-size: 14px;
+    line-height: 1.143;
+    font-family: Arial, Helvetica, sans-serif;
+    background-color: $color-light-gray;
+    border: 1px solid #E7E7E7;
+    box-shadow: none;
+
+    &[disabled] {
+        background-color: #efefef;
+    }
+}
+
+.select {
+    padding: 11px 32px 11px 11px;
+    appearance: none;
+    background-image: url($path-image-icons + "icon-arrow.svg");
+    background-repeat: no-repeat;
+    background-position: right 16px center;
+}
+
+.textarea {
+    height: 120px;
+    max-width: 100%;
+}
+
+.checkbox {
+    position: relative;
+
+    &--v-margin {
+        margin-top: $margin-large;
+        margin-bottom: $margin-small;
+
+        @include breakpoint-max(md) {
+            margin-top: 0;
+            justify-content: flex-start;
+        }
+    }
+
+    &__input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        border: 0;
+        padding: 0;
+        white-space: nowrap;
+        clip-path: inset(100%);
+        clip: rect(0 0 0 0);
+        overflow: hidden;
+    }
+
+    &__label {
+        position: relative;
+        padding-left: 25px;
+        user-select: none;
+        cursor: pointer;
+        font-size: $font-size-normal;
+    }
+
+    &__label::before {
+        content: '';
+        width: 18px;
+        height: 18px;
+        position: absolute;
+        left: 0;
+        background: url($path-image-icons + "icon-cb-off.svg") center / cover no-repeat;
+    }
+
+    &__input:checked {
+        + .checkbox__label::before {
+            content: '';
+            background: url($path-image-icons + "icon-cb-on.svg") center / cover no-repeat;
+        }
+    }
+
+    &__input[disabled] {
+        + .checkbox__label::before {
+            opacity: .4;
+        }
+    }
+}
+
+.radio {
+    display: inline-flex;
+    flex-direction: column;
+
+    &__input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        border: 0;
+        padding: 0;
+        white-space: nowrap;
+        clip-path: inset(100%);
+        clip: rect(0 0 0 0);
+        overflow: hidden;
+    }
+
+    &__label {
+        position: relative;
+        padding-left: 25px;
+        user-select: none;
+        cursor: pointer;
+        font-size: $font-size-normal;
+    }
+
+    &__label::before {
+        content: '';
+        width: 22px;
+        height: 22px;
+        position: absolute;
+        left: -2px;
+        top: 1px;
+        background: url($path-image-icons + "icon-radio-off.svg") center / cover no-repeat;
+    }
+
+    &__input:checked {
+        + .radio__label::before {
+            content: '';
+            background: url($path-image-icons + "icon-radio-on.svg") center / cover no-repeat;
+        }
+    }
+
+    &__input[disabled] {
+        + .radio__label::before {
+            opacity: .4;
+        }
+    }
+}
+
+.switch {
+    margin: 0 8px;
+    height: 24px;
+
+    &__input {
+        display: none;
+    }
+
+    &__slider {
+        display: inline-block;
+        width: 40px;
+        height: 24px;
+        background-color: $color-purple;
+        border-radius: 34px;
+        cursor: pointer;
+        position: relative;
+
+        &::before {
+            content: "";
+            position: absolute;
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            border-radius: 50%;
+            transition: 0.4s;
+        }
+    }
+
+    &__input:checked + &__slider::before {
+        transform: translateX(16px);
+    }
+}
+
+.switch-wrap {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    &--v-margin {
+        margin-top: $margin-large;
+        margin-bottom: $margin-small;
+
+        @include breakpoint-max(md) {
+            margin-top: 0;
+            justify-content: flex-start;
+        }
+    }
+}
+
+@import "form-group";
+@import "form-input-group";

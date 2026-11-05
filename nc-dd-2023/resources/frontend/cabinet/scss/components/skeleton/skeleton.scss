@@ -1,0 +1,26 @@
+.skeleton {
+    opacity: .3;
+    pointer-events: none;
+
+    &__line {
+        width: 70px;
+        height: 24px;
+        max-width: 100%;
+        display: inline-block;
+        vertical-align: middle;
+        color: transparent;
+        border-radius: 3px;
+        background-image: linear-gradient(90deg, #ddd 0px, #e8e8e8 40px, #ddd 80px);
+        background-size: 600px;
+        animation: skeletonShineLines 1.8s infinite linear;
+    }
+}
+
+@keyframes skeletonShineLines {
+    0% {
+        background-position: -220px;
+    }
+    40%, 100% {
+        background-position: 220px;
+    }
+}

@@ -1,0 +1,142 @@
+.feedback {
+    @extend .section;
+
+    &__body {
+        width: 100%;
+        max-width: 992px;
+        margin-left: auto;
+        margin-right: auto;
+        display: flex;
+        border-radius: $border-radius;
+        box-shadow: $box-shadow;
+        overflow: hidden;
+    }
+
+    &__contacts {
+        display: flex;
+        flex-direction: column;
+        padding: $padding-small;
+    }
+
+    &__contacts {
+        width: 38%;
+        background-color: $color-dark-blue;
+        color: $color-white;
+    }
+
+    &__contacts-list {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        margin-top: $margin-small;
+
+        a {
+            color: $color-white;
+        }
+
+        li {
+            display: flex;
+            align-items: center;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .icon-wrap {
+            margin-right: $margin-small;
+
+            .icon {
+                stroke: none;
+            }
+        }
+    }
+
+    &__form {
+        width: 62%;
+        background-color: $color-white;
+        padding: $padding-small;
+    }
+
+    &__form-body {
+        .textarea {
+            width: 100%;
+            height: 160px;
+        }
+
+        .feedback__form.is-success & {
+            display: none;
+        }
+    }
+
+    &__form-recaptcha {
+        display: inline-block;
+        vertical-align: middle;
+    }
+
+    &__privacy {
+        display: flex;
+        flex-direction: column;
+    }
+
+    &__privacy-text {
+        display: block;
+        font-size: 14px;
+        margin-bottom: 16px;
+    }
+
+    &__form-submit-wrap {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    &__map {
+        margin-top: $margin-small;
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 230px;
+    }
+
+    &__map-wrap {
+        margin-top: $margin-small;
+        width: 100%;
+        height: 100%;
+    }
+
+    &__map-title {
+        font-size: $font-size-normal;
+    }
+
+    @include breakpoint-max(lg) {
+        &__body {
+            flex-direction: column-reverse;
+        }
+
+        &__form {
+            width: 100%;
+            margin-bottom: $margin-small;
+        }
+
+        &__contacts {
+            width: 100%;
+            margin-bottom: 0;
+        }
+
+        &__privacy {
+            padding: 0;
+        }
+
+        &__privacy-text {
+            margin-bottom: 0;
+        }
+
+        &__form-submit {
+            width: 100%;
+        }
+
+        &__form-submit-wrap {
+            flex-direction: column;
+            gap: 16px;
+        }
+    }
+}

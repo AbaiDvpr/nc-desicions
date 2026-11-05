@@ -1,0 +1,24 @@
+.welcome {
+    padding: $padding-large;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: $box-shadow;
+    border-radius: $border-radius;
+    background-color: $color-white;
+
+    @include breakpoint-max(lg) {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: $padding-small;
+    }
+
+    &__text {
+        width: 60%;
+        margin: 0;
+
+        @include breakpoint-max(lg) {
+            width: 100%;
+        }
+    }
+}

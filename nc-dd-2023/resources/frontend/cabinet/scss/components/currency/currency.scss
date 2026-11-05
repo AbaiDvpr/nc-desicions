@@ -1,0 +1,34 @@
+.currency-eur {
+    &::after {
+        content: '€';
+    }
+}
+
+.currency-kzt {
+    &::after {
+        content: '₸';
+    }
+}
+
+.currency-usd {
+    &::after {
+        content: '$';
+    }
+}
+
+.currency-income {
+    color: $color-success;
+
+    &::before {
+        content: '+';
+    }
+}
+
+.currency-outcome {
+    color: $color-danger;
+
+    &::before {
+        content: '-';
+    }
+}
+

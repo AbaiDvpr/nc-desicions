@@ -1,0 +1,111 @@
+@import "resources/frontend/common/scss/utils/utils";
+@import "resources/frontend/common/scss/components/grid/grid";
+@import "resources/frontend/common/scss/vendor/notyf/notyf";
+@import "vendor/tiny-slider/tiny-slider";
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+
+    &::before,
+    &::after {
+        box-sizing: border-box;
+    }
+}
+
+.hidden {
+    display: none !important;
+}
+
+.hidden-lg {
+    display: none;
+
+    @include breakpoint-max(md) {
+        display: flex;
+    }
+}
+
+img {
+    height: auto;
+    max-width: 100%;
+    font-style: italic;
+
+    &:not([src]):not([srcset]) {
+        visibility: hidden;
+    }
+}
+
+// TODO: Убрать по всему лендингу
+.img-responsive {
+    width: 100%;
+    height: auto;
+}
+
+table img {
+    max-width: none;
+}
+
+ul li {
+    list-style: none;
+}
+
+a {
+    color: $color-purple;
+    text-decoration: none;
+    transition: color $transition-fast;
+
+    &:hover,
+    &:active {
+        color: lighten($color-purple, 5%);
+    }
+}
+
+p {
+    margin-bottom: 12px;
+}
+
+svg {
+    width: 1em;
+    height: 1em;
+    fill: currentColor;
+    pointer-events: none;
+}
+
+html,
+body {
+    min-height: 100vh;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    color: $color-black;
+    line-height: 1.5;
+
+    &.blocker {
+        overflow: hidden;
+    }
+}
+
+@import "resources/frontend/common/scss/components/loader/loader";
+@import "resources/frontend/common/scss/components/payment/payment";
+@import "resources/frontend/common/scss/components/cookie-alert/cookie-alert";
+@import "resources/frontend/common/scss/components/admin-bar/admin-bar";
+@import "resources/frontend/common/scss/components/icons/icons";
+@import "resources/frontend/common/scss/components/btn/btn";
+@import "resources/frontend/common/scss/components/burger/burger";
+@import "resources/frontend/common/scss/components/alerts/alerts";
+@import "resources/frontend/common/scss/components/form/form";
+@import "resources/frontend/common/scss/components/sidebar/sidebar";
+@import "resources/frontend/common/scss/components/post/post";
+@import "resources/frontend/common/scss/components/modal/modal";
+@import "resources/frontend/common/scss/components/tariff-nav/tariff-nav";
+
+@import "components/components";
+
+@import "components/authorization/authorization";
+@import "resources/frontend/common/scss/components/small-blocks/small-blocks";

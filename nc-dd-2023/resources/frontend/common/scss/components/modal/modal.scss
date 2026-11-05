@@ -1,0 +1,225 @@
+.modal {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: $z-index-fixed;
+    background-color: rgba($color-black, 0.5);
+    transition: opacity $transition-fast;
+
+    &__overlay {
+        width: 100%;
+        height: 100%;
+        position: absolute;
+        left: 0;
+        top: 0;
+        background-color: rgba($color-black, 0.5);
+        transition: opacity $transition-fast;
+        opacity: 0;
+    }
+
+    &__body {
+        position: relative;
+        background-color: $color-white;
+        box-shadow: $box-shadow;
+        border-radius: $border-radius;
+        max-width: 650px;
+        max-height: calc(100% - 32px);
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        transition: $transition-fast;
+        transform: translateY(0);
+        overflow: hidden;
+
+        .modal-enter-from &,
+        .modal-leave-to & {
+            transform: translateY(-75px);
+            opacity: 0;
+        }
+
+        @include breakpoint-max(md) {
+            width: 100%;
+            margin: 0 8px;
+        }
+    }
+
+    &__close {
+        padding: 12px;
+        color: $color-dark-grey;
+        position: absolute;
+        right: 4px;
+        top: 0;
+        font-size: 28px;
+
+        &:hover {
+            color: $color-dark-red;
+        }
+
+        &.is-disabled {
+            opacity: .5;
+            pointer-events: none;
+        }
+    }
+
+    &__header {
+        display: flex;
+        flex-direction: column;
+        padding: 12px 16px;
+        background-color: $color-light-gray;
+    }
+
+    &__main {
+        overflow-y: auto;
+    }
+
+    &__title {
+        color: $color-purple;
+        font-size: 20px;
+    }
+
+    &__subtitle {
+        font-size: $font-size-normal;
+        color: $color-dark-grey;
+
+        &:not(:first-child) {
+            margin-top: $margin-small;
+        }
+    }
+
+    &__content {
+        min-height: 130px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: $padding-small;
+    }
+
+    &__content-wrap {
+        display: flex;
+        align-items: center;
+    }
+
+    &__text {
+        display: flex;
+        flex-direction: column;
+        margin-left: $margin-small;
+    }
+
+    &__footer {
+        display: flex;
+        flex-direction: column;
+        padding: $padding-small;
+        border-top: 1px solid $color-light-gray;
+    }
+
+    &--site {
+        display: none;
+        background-color: transparent;
+
+        &.is-show {
+            display: flex;
+        }
+    }
+
+    &--danger {
+
+        .icon {
+            stroke: $color-danger;
+            width: 42px;
+            height: 42px;
+        }
+
+        .modal__close {
+            color: $color-white;
+        }
+
+        .modal__header {
+            background-color: $color-danger;
+        }
+
+        .modal__title {
+            color: $color-white;
+        }
+
+        .modal__footer {
+            background-color: lighten($color-gray, 40) ;
+        }
+    }
+
+    &--success {
+
+        .icon {
+            stroke: $color-success;
+            width: 42px;
+            height: 42px;
+        }
+
+        .modal__close {
+            color: $color-white;
+        }
+
+        .modal__header {
+            background-color: $color-success;
+        }
+
+        .modal__title {
+            color: $color-white;
+        }
+
+        .modal__footer {
+            background-color: lighten($color-gray, 40) ;
+        }
+    }
+
+    &--info {
+
+        .icon {
+            stroke: $color-info;
+            width: 42px;
+            height: 42px;
+        }
+
+        .modal__close {
+            color: $color-white;
+        }
+
+        .modal__header {
+            background-color: $color-info;
+        }
+
+        .modal__title {
+            color: $color-white;
+        }
+
+        .modal__footer {
+            background-color: lighten($color-gray, 40) ;
+        }
+    }
+
+    &--document {
+        .modal__body {
+            max-width: 1150px;
+            max-height: calc(100% - 100px);
+        }
+
+        .modal__title {
+            color: $color-black;
+            font-size: 18px;
+        }
+    }
+}
+
+.modal-enter-active,
+.modal-leave-active {
+    transition: opacity 0.5s ease;
+}
+
+.modal-enter-from,
+.modal-leave-to {
+    opacity: 0;
+}

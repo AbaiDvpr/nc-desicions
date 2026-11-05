@@ -1,0 +1,93 @@
+.course-playlist {
+    &__item {
+        padding: $padding-small;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        cursor: pointer;
+        transition: $transition-fast;
+
+        &:hover {
+            color: $color-purple;
+            background-color: $color-light-puprple;
+        }
+
+        &:not(:last-child) {
+            border-bottom: 1px solid #f1f1f1;
+        }
+    }
+
+    &__item-icon {
+        width: 42px;
+        height: 42px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        border-radius: 50%;
+
+        .icon {
+            stroke: $color-purple;
+        }
+    }
+
+    &__item-body {
+        display: flex;
+        flex-grow: 1;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    &__item-title {
+        padding-right: $padding-small;
+        font-size: 16px;
+        line-height: 1.2;
+        font-weight: 700;
+        color: $color-black;
+    }
+
+    &__item-time {
+        flex-shrink: 0;
+        color: $color-dark-grey;
+    }
+
+    &__item.is-done {
+        .course-playlist__item-icon {
+            background-color: $color-purple;
+
+            .icon {
+                stroke: $color-white;
+            }
+        }
+    }
+
+    &__item.is-active {
+        background-color: $color-light-puprple;
+
+        .course-playlist__item-icon {
+            background-color: $color-white;
+
+            .icon {
+                stroke: $color-purple;
+            }
+        }
+    }
+
+    &__item.is-locked {
+        pointer-events: none;
+        user-select: none;
+        opacity: .7;
+
+        .course-playlist__item-icon {
+            background-color: $color-dark-grey;
+
+            .icon {
+                stroke: $color-white;
+            }
+        }
+    }
+
+    .course-progress {
+        border-bottom: 1px solid $color-light-gray;
+    }
+}

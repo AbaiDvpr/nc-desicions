@@ -1,0 +1,95 @@
+image: atlassian/default-image:2
+
+pipelines:
+  default:
+    - step:
+        name: NPM Install
+        image: node
+        runs-on:
+          - 'self.hosted'
+          - 'linux'
+        caches:
+          - node
+        script:
+          - yarn
+          - yarn prod:all
+        artifacts:
+          - node_modules
+          - public/**
+          - vendor/**
+    - step:
+        name: Test
+        image: arrim/basephp:81m
+        runs-on:
+          - 'self.hosted'
+          - 'linux'
+        caches:
+          - composer
+        script:
+          - composer install --ignore-platform-reqs --no-interaction --prefer-dist --no-scripts
+          - php artisan about --env=testing
+          - php artisan test --env=testing --filter=Feature
+          - php artisan test --env=testing --filter=Unit
+  branches:
+    master:
+      - step:
+          name: Composer Install
+          image: arrim/basephp:81m
+          caches:
+            - composer
+          script:
+            - composer install --ignore-platform-reqs --no-interaction --prefer-dist --no-scripts
+          artifacts:
+            - vendor/**
+      - step:
+            name: NPM Install
+            image: node
+            caches:
+              - node
+            script:
+                - yarn
+                - yarn prod:admin
+                - yarn prod:site
+                - yarn prod:cabinet
+            artifacts:
+                - node_modules
+                - public/**
+                - vendor/**
+      - step:
+          name: Build and Push Docker Image
+          caches:
+            - docker
+          services:
+            - docker
+          script:
+            - export COMMIT_HASH=$(echo $BITBUCKET_COMMIT | cut -c 1-8)
+            - "export IMAGE_NAME=ncdecision/ncdecision:${COMMIT_HASH}"
+            - "echo \"Building Docker image: ${IMAGE_NAME}\""
+            - docker login -u $DOCKER_HUB_USERNAME -p $DOCKER_HUB_PASSWORD
+            - ls .
+            - docker build -t ${IMAGE_NAME} -f ./docker/Dockerfile .
+            - docker push ${IMAGE_NAME}
+            - "echo \"Docker image pushed: ${IMAGE_NAME}\""
+      - step:
+          name: Deploy
+          script:
+            - export COMMIT_HASH=$(echo $BITBUCKET_COMMIT | cut -c 1-8)
+            - "export IMAGE_NAME=ncdecision/ncdecision:${COMMIT_HASH}"
+            - "echo \"Deploying Docker image: ${IMAGE_NAME}\""
+            - export DEPLOY_COLOR=$(ssh $SSH_USER@$SSH_HOST 'cd /var/www/new/; if [ $(docker compose -f docker-compose-green.yml ps -q | wc -l) -eq 5 ]; then echo green; else echo blue; fi')
+            - export PREVIOS_DEPLOY_COLOR=$(if [ $DEPLOY_COLOR == "blue" ]; then echo "green"; else echo "blue"; fi)
+            - export PORT_DESKTOP=$(if [ $DEPLOY_COLOR == "blue" ]; then echo "8000"; else echo "8010"; fi)
+            - export PORT_API=$(if [ $DEPLOY_COLOR == "blue" ]; then echo "8001"; else echo "8011"; fi)
+            - export PORT_ADMIN=$(if [ $DEPLOY_COLOR == "blue" ]; then echo "8002"; else echo "8012"; fi)
+            - echo "Deploying to ${DEPLOY_COLOR}..."
+            - ssh $SSH_USER@$SSH_HOST "mkdir -p /var/www/new/storage/{desktop,api,admin}/${COMMIT_HASH}/debugbar; mkdir -p /var/www/new/storage/{desktop,api,admin}/${COMMIT_HASH}/framework/{cache,sessions,testing,views}; mkdir -p /var/www/new/storage/{desktop,api,admin}/${COMMIT_HASH}/framework/cache/data;chown -R www-data:www-data /var/www/new/storage/{desktop,api,admin}/${COMMIT_HASH}/debugbar; chown -R www-data:www-data /var/www/new/storage/{desktop,api,admin}/${COMMIT_HASH}/framework/{cache,sessions,testing,views}; chown -R www-data:www-data /var/www/new/storage/"
+            - cp -r deploy/docker-compose.yml deploy/docker-compose-${DEPLOY_COLOR}.yml
+            - sed -i "s/deploy-color/${DEPLOY_COLOR}/g" deploy/docker-compose-${DEPLOY_COLOR}.yml
+            - sed -i "s/IMAGE_NAME/$(sed 's,/,\\/,g' <<< $IMAGE_NAME)/g" deploy/docker-compose-${DEPLOY_COLOR}.yml
+            - sed -i "s/COMMIT_HASH/${COMMIT_HASH}/g" deploy/docker-compose-${DEPLOY_COLOR}.yml
+            - sed -i "s/8000/${PORT_DESKTOP}/g" deploy/docker-compose-${DEPLOY_COLOR}.yml
+            - sed -i "s/8001/${PORT_API}/g" deploy/docker-compose-${DEPLOY_COLOR}.yml
+            - sed -i "s/8002/${PORT_ADMIN}/g" deploy/docker-compose-${DEPLOY_COLOR}.yml
+            - "scp -r deploy/docker-compose-${DEPLOY_COLOR}.yml $SSH_USER@$SSH_HOST:/var/www/new/docker-compose-${DEPLOY_COLOR}.yml"
+            - ssh $SSH_USER@$SSH_HOST "docker login -u $DOCKER_HUB_USERNAME -p $DOCKER_HUB_PASSWORD; cd /var/www/new/; docker compose -f docker-compose-${DEPLOY_COLOR}.yml pull; docker compose -f docker-compose-${DEPLOY_COLOR}.yml up -d; docker compose -f docker-compose-${PREVIOS_DEPLOY_COLOR}.yml down;"
+            - echo "Deployed to ${DEPLOY_COLOR}!"

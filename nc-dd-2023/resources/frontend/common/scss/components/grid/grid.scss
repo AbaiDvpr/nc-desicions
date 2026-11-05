@@ -1,0 +1,38 @@
+@use "sass:math";
+
+@import "resources/frontend/common/scss/utils/vars";
+
+.row {
+    display: flex;
+    flex-wrap: wrap;
+    margin-left: -8px;
+    margin-right: -8px;
+
+    &--align-center {
+        align-items: center;
+    }
+}
+
+[class*='col-'] {
+    position: relative;
+    padding-left: 8px;
+    padding-right: 8px;
+}
+
+@for $i from 1 through $columns {
+   .col-#{$i} {
+       flex: 0 0 percentage(math.div($i, $columns));
+       max-width: percentage(math.div($i, $columns));
+    }
+}
+
+@each $size in map-keys($breakpoints) {
+    @media (min-width: map_get($breakpoints, $size)) {
+        @for $i from 1 through $columns {
+            .col-#{$size}-#{$i} {
+                flex: 0 0 percentage(math.div($i, $columns));
+                max-width: percentage(math.div($i, $columns));
+            }
+        }
+    }
+}

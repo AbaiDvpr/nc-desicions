@@ -1,0 +1,5 @@
+@use "sass:math";
+
+@function aspect-ratio($width, $height) {
+    @return math.div($height, $width) * 100%;
+}

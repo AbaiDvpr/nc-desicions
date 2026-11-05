@@ -1,0 +1,55 @@
+.widget-donut-tiny {
+    display: flex;
+    align-items: center;
+
+    &__chart {
+        max-width: 140px;
+        overflow: visible;
+    }
+
+    &__title {
+        font-weight: normal;
+        font-size: 18px;
+        line-height: 1.2;
+        color: $color-blue;
+    }
+
+    &__cost {
+        margin-top: 8px;
+        font-weight: 700;
+        font-size: 18px;
+        color: $color-blue;
+    }
+
+    &--xs {
+        .widget-donut-tiny__title {
+            font-size: 15px;
+            line-height: 1;
+
+            @include breakpoint-max(md) {
+                font-size: 18px;
+                line-height: 1.2;
+            }
+        }
+
+        .widget-donut-tiny__cost {
+            font-size: 15px;
+            line-height: 1;
+
+            @include breakpoint-max(md) {
+                font-size: 18px;
+                line-height: 1.2;
+            }
+        }
+
+        .widget-donut-tiny__chart {
+            width: 90px;
+            margin-right: 0;
+
+            @include breakpoint-max(md) {
+                margin-right: $margin-small;
+                width: 140px;
+            }
+        }
+    }
+}

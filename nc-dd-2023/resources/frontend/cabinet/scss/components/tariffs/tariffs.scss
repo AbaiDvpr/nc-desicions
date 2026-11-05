@@ -1,0 +1,18 @@
+@import "tariff-card";
+
+.tariffs {
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+}
+
+.tariffs-cards {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 16px;
+
+    @include breakpoint-max(lg) {
+        flex-direction: column;
+    }
+}

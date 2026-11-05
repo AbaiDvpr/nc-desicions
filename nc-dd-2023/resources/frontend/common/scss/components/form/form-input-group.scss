@@ -1,0 +1,49 @@
+.form-input-group {
+    display: flex;
+
+    &.is-error {
+        .form-input-group__prepend,
+        .form-input-group__append,
+        .input,
+        .select {
+            border-color: $color-danger;
+            background-color: #ffdbdb;
+        }
+    }
+
+    .form-input {
+        flex-grow: 1;
+    }
+
+    &__prepend,
+    &__append {
+        display: flex;
+        align-items: center;
+        border: 1px solid #E7E7E7;
+        background-color: $color-light-gray;
+    }
+
+    &__prepend {
+        padding: 0 15px;
+        margin-right: -1px;
+
+        input[type="checkbox"],
+        input[type="radio"] {
+            width: 15px;
+            height: 15px;
+            padding: 0;
+            border: none;
+            cursor: pointer;
+        }
+    }
+
+    &__append {
+        margin-left: -1px;
+
+        select {
+            min-width: max-content;
+            border: none;
+            background-color: transparent;
+        }
+    }
+}

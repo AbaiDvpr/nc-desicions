@@ -1,0 +1,9 @@
+.course-sidebar {
+    margin-bottom: 0;
+    height: 100%;
+
+    @include breakpoint-max(lg) {
+        margin-top: $margin-small;
+        height: auto;
+    }
+}

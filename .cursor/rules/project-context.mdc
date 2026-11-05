@@ -1,0 +1,23 @@
+---
+description: Откуда читать старый NC Consulting и куда писать новый код
+alwaysApply: true
+---
+
+# Два проекта в этой папке
+
+- `nc-dd-2023` — старый Laravel 10. Только читать: поведение, формулы, экраны, отчёты.
+- `NC-consulting-NEW` — новый проект. Весь новый код только сюда.
+
+Новый стек: `backend` — FastAPI, SQLAlchemy, PostgreSQL; `frontend` — React, Vite, React Router.
+
+Переписываем поведение, не файлы. PHP, Blade и Vue из `nc-dd-2023` в новый проект не копировать. В `nc-dd-2023` ничего не менять, включая `vendor/`, `storage/` и `node_modules/`.
+
+Перед новой фичей найти, как она сделана в старом коде, затем реализовать заново:
+
+- финмодель и Excel — `nc-dd-2023/app/Components/Report`, `app/DataHandlers/Project`
+- учёт (ДДС, ОПиУ, баланс) — `nc-dd-2023/app/Components/Accounting`, `app/DataHandlers/Company`
+- API кабинета — `nc-dd-2023/routes/api.php`
+- админка — `nc-dd-2023/routes/backend`
+- сайт и оплата — `nc-dd-2023/routes/web.php`
+
+В новом коде API класть в `NC-consulting-NEW/backend/app`, экраны в `NC-consulting-NEW/frontend/src`. Секреты из старого `.env` не переносить.

@@ -1,0 +1,39 @@
+.user-dropdown {
+    display: flex;
+    align-items: center;
+    max-width: 300px;
+
+    &__img {
+        display: flex;
+        flex-shrink: 0;
+        border-radius: 50%;
+        overflow: hidden;
+        width: 35px;
+        height: 35px;
+
+        img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+    }
+
+    &__name {
+        max-width: 150px;
+        font-size: 14px;
+        text-align: left;
+        margin-left: 8px;
+        color: $color-dark-grey;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+
+        @include breakpoint-max(md) {
+            display: none;
+        }
+    }
+
+    &__menu {
+        min-width: 170px;
+    }
+}

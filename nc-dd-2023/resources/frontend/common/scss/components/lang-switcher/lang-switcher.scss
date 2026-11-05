@@ -1,0 +1,19 @@
+.lang-switcher {
+    position: relative;
+    color: $color-dark-grey;
+    font-size: 14px;
+    background-color: $color-white;
+
+    &__toggle {
+       color: $color-dark-grey;
+        text-transform: uppercase;
+    }
+
+    &__menu {
+        text-transform: uppercase;
+    }
+
+    &__menu-item {
+        padding: $padding-small;
+    }
+}

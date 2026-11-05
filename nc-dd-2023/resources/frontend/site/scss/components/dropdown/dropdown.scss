@@ -1,0 +1,35 @@
+.dropdown {
+    position: relative;
+
+    &__btn {
+        cursor: pointer;
+    }
+
+    &__items {
+        margin-top: 16px;
+        min-width: 100px;
+        position: absolute;
+        display: none;
+        overflow: hidden;
+        background-color: $color-light-puprple;
+        box-shadow: $box-shadow;
+        border-radius: $border-radius;
+
+        &.is-active {
+            display: block;
+        }
+    }
+
+    &__item {
+        width: 100%;
+        display: block;
+        color: $color-purple;
+        padding: 8px 16px;
+        text-align: center;
+
+        &:hover {
+            background-color: $color-purple;
+            color: $color-white;
+        }
+    }
+}

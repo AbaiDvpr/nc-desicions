@@ -1,0 +1,82 @@
+:root {
+  --bg: #f3f5f9;
+  --text: #172033;
+  --muted: #6b7488;
+  --line: #e2e6ef;
+  --blue: #2f5bea;
+  --side: #121a2c;
+  font-family: Inter, system-ui, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+h1 { margin: 0 0 16px; font-size: 26px; }
+h2 { margin: 0 0 12px; font-size: 18px; }
+a { color: var(--blue); text-decoration: none; }
+button, input, select { font: inherit; }
+
+.boot { padding: 40px; color: var(--muted); }
+
+.shell { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+.side { background: var(--side); color: #c5cedf; padding: 20px 14px; display: flex; flex-direction: column; gap: 18px; }
+.side__logo { width: 140px; height: auto; }
+.side nav { display: flex; flex-direction: column; gap: 4px; }
+.side__link { color: #c5cedf; padding: 10px 12px; border-radius: 8px; }
+.side__link.active { background: #243352; color: #fff; }
+.side__out { margin-top: auto; background: transparent; color: #c5cedf; border: 1px solid #31415f; border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+.main { padding: 28px; }
+.main__who { color: var(--muted); margin-bottom: 12px; font-size: 14px; }
+
+.card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+.muted { color: var(--muted); font-size: 13px; }
+.alert { background: #fdecec; color: #9d2222; padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; }
+.ok { background: #e8f7ee; color: #146c36; padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; }
+.btn { background: var(--blue); color: #fff; border: 0; border-radius: 8px; padding: 9px 14px; cursor: pointer; }
+.btn:disabled { opacity: 0.6; }
+
+.login { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+.login__card { width: min(400px, 100%); display: flex; flex-direction: column; gap: 12px; }
+.login__logo { width: 160px; }
+.login label, .form label { display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600; }
+.login input, .form input, .form select, .tariff input {
+  padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; font-weight: 400;
+}
+
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.stat { color: inherit; }
+.stat__num { font-size: 32px; font-weight: 700; margin-top: 6px; }
+
+.table-wrap { overflow-x: auto; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 14px; }
+th { color: var(--muted); font-weight: 600; }
+
+.facts { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+.form { margin-bottom: 20px; }
+.form__row { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
+.form__row .grow { flex: 1; min-width: 180px; }
+.back { display: inline-block; margin-bottom: 8px; color: var(--muted); }
+
+.pill { display: inline-block; background: #e8f7ee; color: #146c36; border-radius: 999px; padding: 4px 10px; font-size: 13px; }
+
+.plan-group { margin-bottom: 28px; }
+.plan-group h2 { margin-bottom: 10px; }
+.plan-table { min-width: 640px; }
+.plan-table th, .plan-table td { text-align: center; }
+.plan-table th:first-child, .plan-table td:first-child { text-align: left; width: 120px; color: var(--muted); font-weight: 600; position: sticky; left: 0; background: #fff; }
+.plan-table__name { font-size: 16px; color: var(--text); }
+.plan-table__sum { margin-top: 4px; font-size: 14px; font-weight: 700; color: var(--text); }
+.plan-table input { width: 108px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; text-align: right; }
+.plan-table input:disabled { background: #f3f5f9; color: var(--muted); }
+.plan-table .btn { min-width: 108px; }
+.plan-table .btn:disabled { background: #e7ebf3; color: #8b93a7; opacity: 1; cursor: default; }
+
+@media (max-width: 900px) {
+  .shell { grid-template-columns: 1fr; }
+  .side { position: sticky; top: 0; z-index: 2; }
+  .side nav { flex-direction: row; overflow-x: auto; }
+  .side__out { margin-top: 0; }
+  .stats, .facts { grid-template-columns: 1fr 1fr; }
+}

@@ -1,0 +1,15 @@
+.sidebar {
+    &__links {
+        display: flex;
+        gap: 8px 0;
+        flex-direction: column;
+    }
+
+    li {
+        padding: 8px 0;
+
+        &:not(:last-child) {
+            border-bottom: 1px solid $color-light-gray;
+        }
+    }
+}

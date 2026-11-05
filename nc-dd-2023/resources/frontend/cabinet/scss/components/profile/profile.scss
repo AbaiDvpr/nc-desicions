@@ -1,0 +1,25 @@
+.profile {
+
+    &__title {
+        padding: $padding-small 0;
+        font-weight: 700;
+    }
+
+    &__hint {
+        margin-top: $margin-small;
+        font-size: 11px;
+        color: $color-dark-blue;
+
+        @include breakpoint-max(lg) {
+            display: none;
+        }
+    }
+}
+
+.profile__col {
+    display: flex;
+    flex-direction: column;
+}
+
+@import "profile-avatar";
+@import "profile-card";

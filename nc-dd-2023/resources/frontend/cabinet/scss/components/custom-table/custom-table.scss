@@ -1,0 +1,93 @@
+.custom-table {
+    --cell-count: 1;
+    margin-bottom: $margin-small;
+    display: flex;
+    flex-direction: column;
+    background-color: $color-white;
+
+    @include breakpoint-max(xl) {
+        background: none;
+    }
+
+    &__header {
+        display: flex;
+        border-top-left-radius: $border-radius;
+        border-top-right-radius: $border-radius;
+        overflow: hidden;
+        background-color: $color-purple;
+        color: $color-white;
+        font-weight: bold;
+
+        @include breakpoint-max(xl) {
+            display: none;
+        }
+    }
+
+    &__row {
+        display: flex;
+        align-items: center;
+
+        &:not(:last-child) {
+            border-bottom: 1px solid #f1f0ff;
+        }
+
+        @include breakpoint-max(xl) {
+            padding-top: 48px;
+            position: relative;
+            flex-direction: column;
+            margin-bottom: 8px;
+            box-shadow: $box-shadow;
+            background-color: $color-white;
+        }
+    }
+
+    &__cell {
+        width: calc((100% - 160px) / var(--cell-count));
+        display: flex;
+        flex-shrink: 0;
+        padding: 8px;
+        font-size: 15px;
+
+        &--icon {
+            min-width: 40px;
+            width: auto;
+        }
+
+        &--controls {
+            min-width: 120px;
+            width: auto;
+            display: flex;
+            justify-content: center;
+        }
+
+        &--income,
+        &--active {
+            color: $color-success;
+        }
+
+        &--outcome {
+            color: $color-danger;
+        }
+
+        @include breakpoint-max(xl) {
+            position: relative;
+            width: 100%;
+            justify-content: space-between;
+
+            &:nth-child(2){
+                position: absolute;
+                left: 0;
+                top: 0;
+                background-color: $color-purple;
+                color: $color-white;
+            }
+
+            &::before {
+                content: " " attr(data-label) " ";
+                font-weight: 700;
+                float: left;
+                display: block;
+            }
+        }
+    }
+}

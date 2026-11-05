@@ -1,0 +1,18 @@
+.scrollbar {
+    &::-webkit-scrollbar {
+        height: 8px;
+        width: 8px;
+    }
+
+    &::-webkit-scrollbar-track {
+        background: #f1f1f1;
+    }
+
+    &::-webkit-scrollbar-thumb {
+        background: #342B70;
+    }
+
+    &::-webkit-scrollbar-thumb:hover {
+        background:lighten(#342B70, 10);
+    }
+}
