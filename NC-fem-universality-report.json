@@ -1,0 +1,726 @@
+{
+  "cases": [
+    {
+      "id": 7,
+      "slug": "shop",
+      "title": "Магазин / e-commerce",
+      "name": "Интернет-магазин на Kaspi.kz",
+      "financing": 1,
+      "file": "/var/www/html/nc-desicions/NC-fem-uni-shop.xlsx",
+      "checks": [
+        {
+          "check": "build+calc",
+          "ok": true,
+          "bytes": 192441
+        },
+        {
+          "check": "sheets",
+          "ok": true
+        },
+        {
+          "check": "financing_code",
+          "ok": true,
+          "got": 1,
+          "expected": 1
+        },
+        {
+          "check": "sources=invest",
+          "ok": true,
+          "sources": 18321500.0,
+          "invest": 18321500.0
+        },
+        {
+          "check": "credit_flag",
+          "ok": true,
+          "debt": 0.0
+        },
+        {
+          "check": "investor_flag",
+          "ok": true,
+          "investor": 16321500.0
+        },
+        {
+          "check": "empty loan ok",
+          "ok": true,
+          "opening": 12,
+          "drawn": 0.0,
+          "note": "Платежей нет: срок не задан или заёмных средств нет."
+        },
+        {
+          "check": "no_credit_schedule_ok",
+          "ok": true
+        },
+        {
+          "check": "investor_metrics",
+          "ok": true,
+          "investor_npv": 15703958.9424407,
+          "mode": "with_investor"
+        },
+        {
+          "check": "fcff_vs_indep",
+          "ok": true,
+          "fcff": -13530500.0,
+          "indep": -13530500.0,
+          "funding": 18321500.0,
+          "capex": 2040000.0
+        },
+        {
+          "check": "fcff_excludes_funding",
+          "ok": true,
+          "funding": 18321500.0,
+          "fcff": -13530500.0
+        },
+        {
+          "check": "project_npv_number",
+          "ok": true,
+          "value": 25605628.468417
+        },
+        {
+          "check": "capex_total_nonneg",
+          "ok": true,
+          "to_pay": 2090000.0
+        }
+      ],
+      "metrics": {
+        "financing": {
+          "invest": 18321500.0,
+          "debt": 0.0,
+          "investor": 16321500.0,
+          "own": 2000000.0,
+          "grant": 0.0,
+          "row": 13
+        },
+        "npv": 25605628.468417,
+        "irr": 2.33396350150076,
+        "dscr_min": "Не применяется",
+        "deficit": 0.0,
+        "wacc": 0.1575,
+        "staff": {
+          "total": 5,
+          "production": 2,
+          "admin": 3
+        }
+      },
+      "passed": 13,
+      "failed": 0,
+      "ok": true
+    },
+    {
+      "id": 9,
+      "slug": "manufacturing",
+      "title": "Производство",
+      "name": "Завод Coca-Cola в Казахстане",
+      "financing": 2,
+      "file": "/var/www/html/nc-desicions/NC-fem-uni-manufacturing.xlsx",
+      "checks": [
+        {
+          "check": "build+calc",
+          "ok": true,
+          "bytes": 349485
+        },
+        {
+          "check": "sheets",
+          "ok": true
+        },
+        {
+          "check": "financing_code",
+          "ok": true,
+          "got": 2,
+          "expected": 2
+        },
+        {
+          "check": "sources=invest",
+          "ok": true,
+          "sources": 7395750000.0,
+          "invest": 7395750000.0
+        },
+        {
+          "check": "credit_flag",
+          "ok": true,
+          "debt": 6420000000.0
+        },
+        {
+          "check": "investor_flag",
+          "ok": true,
+          "investor": 0.0
+        },
+        {
+          "check": "loan closes",
+          "ok": true,
+          "opening": 12,
+          "drawn": 5529250000.0,
+          "principal": 5529250000.0,
+          "balance": 0.0
+        },
+        {
+          "check": "sheet:Строки",
+          "ok": true,
+          "value": "по сроку"
+        },
+        {
+          "check": "sheet:Тело",
+          "ok": true,
+          "value": "равно сумме кредита"
+        },
+        {
+          "check": "sheet:Остаток",
+          "ok": true,
+          "value": "ноль"
+        },
+        {
+          "check": "sheet:Взносы",
+          "ok": true,
+          "value": "равны телу и процентам"
+        },
+        {
+          "check": "sheet:Сальдо",
+          "ok": true,
+          "value": "отрицательного нет"
+        },
+        {
+          "check": "has_closing_loan",
+          "ok": true,
+          "found": 1
+        },
+        {
+          "check": "investor_metrics",
+          "ok": true,
+          "investor_npv": "Не применяется",
+          "mode": "no_investor"
+        },
+        {
+          "check": "fcff_vs_indep",
+          "ok": true,
+          "fcff": -7348800000.0,
+          "indep": -7348800000.0,
+          "funding": 7395750000.0,
+          "capex": 6505000000.0
+        },
+        {
+          "check": "fcff_excludes_funding",
+          "ok": true,
+          "funding": 7395750000.0,
+          "fcff": -7348800000.0
+        },
+        {
+          "check": "project_npv_number",
+          "ok": true,
+          "value": 9880629084.01724
+        },
+        {
+          "check": "capex_total_nonneg",
+          "ok": true,
+          "to_pay": 6505000000.0
+        }
+      ],
+      "metrics": {
+        "financing": {
+          "invest": 7395750000.0,
+          "debt": 6420000000.0,
+          "investor": 0.0,
+          "own": 975750000.0,
+          "grant": 0.0,
+          "row": 13
+        },
+        "npv": 9880629084.01724,
+        "irr": 0.554472414523762,
+        "dscr_min": -4.87488616225064,
+        "deficit": 310603750.0,
+        "wacc": 0.13680960348849,
+        "staff": {
+          "total": 10,
+          "production": 5,
+          "admin": 5
+        }
+      },
+      "passed": 18,
+      "failed": 0,
+      "ok": true
+    },
+    {
+      "id": 10,
+      "slug": "it_mixed",
+      "title": "IT / сервис с инвестором и кредитом",
+      "name": "Компьютерный клуб Arena 24",
+      "financing": 4,
+      "file": "/var/www/html/nc-desicions/NC-fem-uni-it_mixed.xlsx",
+      "checks": [
+        {
+          "check": "build+calc",
+          "ok": true,
+          "bytes": 205061
+        },
+        {
+          "check": "sheets",
+          "ok": true
+        },
+        {
+          "check": "financing_code",
+          "ok": true,
+          "got": 4,
+          "expected": 4
+        },
+        {
+          "check": "sources=invest",
+          "ok": true,
+          "sources": 121010000.0,
+          "invest": 121010000.0
+        },
+        {
+          "check": "credit_flag",
+          "ok": true,
+          "debt": 70355500.0
+        },
+        {
+          "check": "investor_flag",
+          "ok": true,
+          "investor": 38579500.0
+        },
+        {
+          "check": "loan closes",
+          "ok": true,
+          "opening": 12,
+          "drawn": 70355500.0,
+          "principal": 70355500.0,
+          "balance": 0.0
+        },
+        {
+          "check": "sheet:Строки",
+          "ok": true,
+          "value": "по сроку"
+        },
+        {
+          "check": "sheet:Тело",
+          "ok": true,
+          "value": "равно сумме кредита"
+        },
+        {
+          "check": "sheet:Остаток",
+          "ok": true,
+          "value": "ноль"
+        },
+        {
+          "check": "sheet:Взносы",
+          "ok": true,
+          "value": "равны телу и процентам"
+        },
+        {
+          "check": "sheet:Сальдо",
+          "ok": true,
+          "value": "отрицательного нет"
+        },
+        {
+          "check": "has_closing_loan",
+          "ok": true,
+          "found": 1
+        },
+        {
+          "check": "investor_metrics",
+          "ok": true,
+          "investor_npv": 137110122.036379,
+          "mode": "with_investor"
+        },
+        {
+          "check": "fcff_vs_indep",
+          "ok": true,
+          "fcff": -110020000.0,
+          "indep": -110020000.0,
+          "funding": 121010000.0,
+          "capex": 103450000.0
+        },
+        {
+          "check": "fcff_excludes_funding",
+          "ok": true,
+          "funding": 121010000.0,
+          "fcff": -110020000.0
+        },
+        {
+          "check": "project_npv_number",
+          "ok": true,
+          "value": 238171307.021427
+        },
+        {
+          "check": "capex_total_nonneg",
+          "ok": true,
+          "to_pay": 103450000.0
+        }
+      ],
+      "metrics": {
+        "financing": {
+          "invest": 121010000.0,
+          "debt": 70355500.0,
+          "investor": 38579500.0,
+          "own": 12075000.0,
+          "grant": 0.0,
+          "row": 13
+        },
+        "npv": 238171307.021427,
+        "irr": 1.1345577621824,
+        "dscr_min": 0.445986761942319,
+        "deficit": 0.0,
+        "wacc": 0.192336201553591,
+        "staff": {
+          "total": 5,
+          "production": 2,
+          "admin": 3
+        }
+      },
+      "passed": 18,
+      "failed": 0,
+      "ok": true
+    },
+    {
+      "id": 12,
+      "slug": "no_credit",
+      "title": "Без кредита (инвестор + свои)",
+      "name": "Гостиница Бурабай",
+      "financing": 1,
+      "file": "/var/www/html/nc-desicions/NC-fem-uni-no_credit.xlsx",
+      "checks": [
+        {
+          "check": "build+calc",
+          "ok": true,
+          "bytes": 371862
+        },
+        {
+          "check": "sheets",
+          "ok": true
+        },
+        {
+          "check": "financing_code",
+          "ok": true,
+          "got": 1,
+          "expected": 1
+        },
+        {
+          "check": "sources=invest",
+          "ok": true,
+          "sources": 4587540000.0,
+          "invest": 4587540000.0
+        },
+        {
+          "check": "credit_flag",
+          "ok": true,
+          "debt": 0.0
+        },
+        {
+          "check": "investor_flag",
+          "ok": true,
+          "investor": 3450790000.0
+        },
+        {
+          "check": "empty loan ok",
+          "ok": true,
+          "opening": 12,
+          "drawn": 0.0,
+          "note": "Платежей нет: срок не задан или заёмных средств нет."
+        },
+        {
+          "check": "no_credit_schedule_ok",
+          "ok": true
+        },
+        {
+          "check": "investor_metrics",
+          "ok": true,
+          "investor_npv": -1834578406.36773,
+          "mode": "with_investor"
+        },
+        {
+          "check": "fcff_vs_indep",
+          "ok": true,
+          "fcff": -4570600000.0,
+          "indep": -4570600000.0,
+          "funding": 4587540000.0,
+          "capex": 4547000000.0
+        },
+        {
+          "check": "fcff_excludes_funding",
+          "ok": true,
+          "funding": 4587540000.0,
+          "fcff": -4570600000.0
+        },
+        {
+          "check": "project_npv_number",
+          "ok": true,
+          "value": -1906594395.32943
+        },
+        {
+          "check": "capex_total_nonneg",
+          "ok": true,
+          "to_pay": 4547000000.0
+        }
+      ],
+      "metrics": {
+        "financing": {
+          "invest": 4587540000.0,
+          "debt": 0.0,
+          "investor": 3450790000.0,
+          "own": 1136750000.0,
+          "grant": 0.0,
+          "row": 13
+        },
+        "npv": -1906594395.32943,
+        "irr": 0.0602217021371954,
+        "dscr_min": "Не применяется",
+        "deficit": 0.0,
+        "wacc": 0.18758836980168,
+        "staff": {
+          "total": 9,
+          "production": 5,
+          "admin": 4
+        }
+      },
+      "passed": 13,
+      "failed": 0,
+      "ok": true
+    },
+    {
+      "id": 16,
+      "slug": "credit_subsidy",
+      "title": "Кредит с субсидией (медцентр)",
+      "name": "Медицинский центр «Радуга здоровья»",
+      "financing": 2,
+      "file": "/var/www/html/nc-desicions/NC-fem-uni-credit_subsidy.xlsx",
+      "checks": [
+        {
+          "check": "build+calc",
+          "ok": true,
+          "bytes": 425301
+        },
+        {
+          "check": "sheets",
+          "ok": true
+        },
+        {
+          "check": "financing_code",
+          "ok": true,
+          "got": 2,
+          "expected": 2
+        },
+        {
+          "check": "sources=invest",
+          "ok": true,
+          "sources": 146000000.0,
+          "invest": 146000000.0
+        },
+        {
+          "check": "credit_flag",
+          "ok": true,
+          "debt": 80000000.0
+        },
+        {
+          "check": "investor_flag",
+          "ok": true,
+          "investor": 0.0
+        },
+        {
+          "check": "loan closes",
+          "ok": true,
+          "opening": 5,
+          "drawn": 80000000.0,
+          "principal": 80000000.0,
+          "balance": 0.0
+        },
+        {
+          "check": "sheet:Строки",
+          "ok": true,
+          "value": "по сроку"
+        },
+        {
+          "check": "sheet:Тело",
+          "ok": true,
+          "value": "равно сумме кредита"
+        },
+        {
+          "check": "sheet:Остаток",
+          "ok": true,
+          "value": "ноль"
+        },
+        {
+          "check": "sheet:Взносы",
+          "ok": true,
+          "value": "равны телу и процентам"
+        },
+        {
+          "check": "sheet:Сальдо",
+          "ok": true,
+          "value": "отрицательного нет"
+        },
+        {
+          "check": "dual conditions block",
+          "ok": true
+        },
+        {
+          "check": "has_closing_loan",
+          "ok": true,
+          "found": 1
+        },
+        {
+          "check": "investor_metrics",
+          "ok": true,
+          "investor_npv": "Не применяется",
+          "mode": "no_investor"
+        },
+        {
+          "check": "fcff_vs_indep",
+          "ok": true,
+          "fcff": -131000000.0,
+          "indep": -131000000.0,
+          "funding": 146000000.0,
+          "capex": 131000000.0
+        },
+        {
+          "check": "fcff_excludes_funding",
+          "ok": true,
+          "funding": 146000000.0,
+          "fcff": -131000000.0
+        },
+        {
+          "check": "project_npv_number",
+          "ok": true,
+          "value": 320562631.413791
+        },
+        {
+          "check": "capex_total_nonneg",
+          "ok": true,
+          "to_pay": 146000000.0
+        }
+      ],
+      "metrics": {
+        "financing": {
+          "invest": 146000000.0,
+          "debt": 80000000.0,
+          "investor": 0.0,
+          "own": 66000000.0,
+          "grant": 0.0,
+          "row": 8
+        },
+        "npv": 320562631.413791,
+        "irr": 0.519936195473664,
+        "dscr_min": -0.474787427724256,
+        "deficit": 15042216.4834327,
+        "wacc": 0.164192759295499,
+        "staff": {
+          "total": 6,
+          "production": 3,
+          "admin": 3
+        }
+      },
+      "passed": 19,
+      "failed": 0,
+      "ok": true
+    },
+    {
+      "id": 11,
+      "slug": "grant",
+      "title": "Грант без кредита",
+      "name": "Конный ипподром Аламан",
+      "financing": 3,
+      "file": "/var/www/html/nc-desicions/NC-fem-uni-grant.xlsx",
+      "checks": [
+        {
+          "check": "build+calc",
+          "ok": true,
+          "bytes": 331170
+        },
+        {
+          "check": "sheets",
+          "ok": true
+        },
+        {
+          "check": "financing_code",
+          "ok": true,
+          "got": 3,
+          "expected": 3
+        },
+        {
+          "check": "sources=invest",
+          "ok": true,
+          "sources": 4451000000.0,
+          "invest": 4451000000.0
+        },
+        {
+          "check": "credit_flag",
+          "ok": true,
+          "debt": 0.0
+        },
+        {
+          "check": "investor_flag",
+          "ok": true,
+          "investor": 0.0
+        },
+        {
+          "check": "empty loan ok",
+          "ok": true,
+          "opening": 12,
+          "drawn": 0.0,
+          "note": "Платежей нет: срок не задан или заёмных средств нет."
+        },
+        {
+          "check": "no_credit_schedule_ok",
+          "ok": true
+        },
+        {
+          "check": "investor_metrics",
+          "ok": true,
+          "investor_npv": "Не применяется",
+          "mode": "no_investor"
+        },
+        {
+          "check": "fcff_vs_indep",
+          "ok": true,
+          "fcff": -4428600000.0,
+          "indep": -4428600000.0,
+          "funding": 4451000000.0,
+          "capex": 4386000000.0
+        },
+        {
+          "check": "fcff_excludes_funding",
+          "ok": true,
+          "funding": 4451000000.0,
+          "fcff": -4428600000.0
+        },
+        {
+          "check": "project_npv_number",
+          "ok": true,
+          "value": -144255500.264181
+        },
+        {
+          "check": "capex_total_nonneg",
+          "ok": true,
+          "to_pay": 4386000000.0
+        }
+      ],
+      "metrics": {
+        "financing": {
+          "invest": 4451000000.0,
+          "debt": 0.0,
+          "investor": 0.0,
+          "own": 0.0,
+          "grant": 4451000000.0,
+          "row": 13
+        },
+        "npv": -144255500.264181,
+        "irr": -0.00706054442539255,
+        "dscr_min": "Не применяется",
+        "deficit": 489347.199999973,
+        "wacc": 0,
+        "staff": {
+          "total": 9,
+          "production": 4,
+          "admin": 5
+        }
+      },
+      "passed": 13,
+      "failed": 0,
+      "ok": true
+    }
+  ],
+  "summary": {
+    "cases": 6,
+    "passed_cases": 6,
+    "failed_cases": 0,
+    "all_ok": true,
+    "verdict": "универсальность подтверждена"
+  }
+}

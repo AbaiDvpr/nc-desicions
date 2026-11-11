@@ -40,10 +40,11 @@ class ProjectController extends BaseController
     {
         $projectRepo   = DI::getRepository()->getProject();
         $projectsCount = $projectRepo->getHistory()->getItemsCount($this->client);
+        $maxProjects   = $this->client->tariff()?->getMaxProjects() ?? 0;
 
         return response()->json([
             'status' => $projectRepo->isPossibleToCreate($this->client),
-            'left'   => max($this->client->tariff()->getMaxProjects() - $projectsCount, 0),
+            'left'   => max($maxProjects - $projectsCount, 0),
         ]);
     }
 

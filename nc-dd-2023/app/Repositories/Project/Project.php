@@ -327,10 +327,15 @@ class Project extends BaseRepository
             return true;
         }
 
-        $tariff        = $user->tariff();
+        $tariff = $user->tariff();
+
+        if (!$tariff || $tariff->isExpired()) {
+            return false;
+        }
+
         $projectsCount = $this->getHistory()->getItemsCount($user);
 
-        if ($tariff->isExpired() || $projectsCount >= $tariff->getMaxProjects()) {
+        if ($projectsCount >= $tariff->getMaxProjects()) {
             return false;
         }
 

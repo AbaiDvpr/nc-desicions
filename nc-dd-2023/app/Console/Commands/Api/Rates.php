@@ -41,8 +41,6 @@ class Rates extends Command
     public function __construct()
     {
         parent::__construct();
-
-        $this->admins = User::whereAdmin(true)->get();
     }
 
     /**
@@ -52,6 +50,8 @@ class Rates extends Command
      */
     public function handle(): int
     {
+        $this->admins = User::whereAdmin(true)->get();
+
         $config = config('rates');
 
         try {

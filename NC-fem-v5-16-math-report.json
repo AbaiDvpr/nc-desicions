@@ -1,0 +1,124 @@
+{
+  "ok": [
+    {
+      "check": "WACC debt rate time-weighted",
+      "value": 0.1697142857142857,
+      "expected": 0.1697142857142857
+    },
+    {
+      "check": "WACC C25 calculated",
+      "value": 0.164192759295499
+    },
+    {
+      "check": "CAPEX row 3 dates/amount",
+      "name": "Помещение для медицинского центра",
+      "pay": "2026-11",
+      "commission": "2026-11"
+    },
+    {
+      "check": "CAPEX row 4 dates/amount",
+      "name": "Мебель для медицинского центра",
+      "pay": "2027-01",
+      "commission": "2027-01"
+    },
+    {
+      "check": "CAPEX row 5 dates/amount",
+      "name": "Ремонт помещения",
+      "pay": "2027-01",
+      "commission": "2027-03"
+    },
+    {
+      "check": "Credit principal closes",
+      "drawn": 80000000.0,
+      "principal": 80000000.0,
+      "balance": 0.0
+    },
+    {
+      "check": "Subsidy = bank% - client%",
+      "bank": 72564261.278214,
+      "client": 55843302.6452932,
+      "subsidy": 16720958.6329208
+    },
+    {
+      "check": "Credit 84 months payment identities"
+    },
+    {
+      "check": "Client rate 12.6% then 20.25%"
+    },
+    {
+      "check": "Schedule check Строки",
+      "value": "по сроку"
+    },
+    {
+      "check": "Schedule check Тело",
+      "value": "равно сумме кредита"
+    },
+    {
+      "check": "Schedule check Остаток",
+      "value": "ноль"
+    },
+    {
+      "check": "Schedule check Взносы",
+      "value": "равны телу и процентам"
+    },
+    {
+      "check": "Schedule check Сальдо",
+      "value": "отрицательного нет"
+    },
+    {
+      "check": "Grace interest 8.1M",
+      "value": 8100000
+    },
+    {
+      "check": "PNL interest = schedule client% by year",
+      "years": [
+        2026,
+        2027,
+        2028,
+        2029,
+        2030,
+        2031,
+        2032,
+        2033,
+        2034,
+        2035
+      ]
+    },
+    {
+      "check": "DDS interest/principal = schedule for 84 months"
+    },
+    {
+      "check": "DDS CAPEX cash dates",
+      "months": {
+        "2026-11": 131000000.0,
+        "2027-01": 15000000.0
+      }
+    },
+    {
+      "check": "FCFF excludes loan/own funding",
+      "funding": 146000000.0,
+      "fcff0": -131000000.0
+    },
+    {
+      "check": "Investor metrics = Не применяется"
+    },
+    {
+      "check": "Project NPV/IRR present",
+      "npv": 320562631.413791,
+      "irr": 0.519936195473664
+    },
+    {
+      "check": "Financing structure 80/0/66"
+    }
+  ],
+  "fail": [],
+  "files": {
+    "raw": "/var/www/html/nc-desicions/NC-fem-v5-16.xlsx",
+    "stamped": "/var/www/html/nc-desicions/NC-fem-v5-16-math-tested.xlsx"
+  },
+  "summary": {
+    "passed": 22,
+    "failed": 0,
+    "score_hint": "9/10+"
+  }
+}
