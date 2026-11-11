@@ -304,15 +304,31 @@ def assemble(form: dict, template=None, answers: dict | None = None, results: di
     payroll = sum(item["fund"] for item in staff)
     rent_rows, admin_rows, marketing_rows = [], [], []
     for row in form.get("admin_expenses") or []:
-        name = str(row.get("name") or "").strip()
-        if not name:
+        value = _num(row.get("value"))
+        land = (
+            bool(row.get("land_tax"))
+            or _num(row.get("land_area")) > 0
+            or _num(row.get("land_rate")) > 0
+            or "земельн" in str(row.get("name") or "").lower()
+        )
+        if value <= 0 and land:
+            value = _num(row.get("land_area")) * _num(row.get("land_rate"))
+        if value <= 0:
             continue
-        item = {"name": name, "value": _num(row.get("value"))}
+        raw = str(row.get("name") or "").strip()
+        if land:
+            name = raw if len(raw) >= 3 else "Земельный налог"
+        else:
+            name = raw if len(raw) >= 2 else ("Аренда" if int(row.get("type_expense") or 0) == 2 else "Прочий расход")
+        item = {"name": name, "value": value}
         (rent_rows if int(row.get("type_expense") or 0) == 2 else admin_rows).append(item)
     for row in form.get("marketing_expenses") or []:
-        name = str(row.get("name") or "").strip()
-        if name:
-            marketing_rows.append({"name": name, "value": _num(row.get("value"))})
+        value = _num(row.get("value"))
+        if value <= 0:
+            continue
+        raw = str(row.get("name") or "").strip()
+        name = raw if len(raw) >= 2 else "Реклама"
+        marketing_rows.append({"name": name, "value": value})
     rent = sum(item["value"] for item in rent_rows)
     admin = sum(item["value"] for item in admin_rows)
     marketing = sum(item["value"] for item in marketing_rows)

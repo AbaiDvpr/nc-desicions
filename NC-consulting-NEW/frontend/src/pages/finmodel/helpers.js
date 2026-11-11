@@ -177,22 +177,24 @@ const named = (rows) =>
   rows.filter((row) => String(row.name || '').trim() || Boolean(row?.land_tax) || num(row?.land_area) > 0)
 
 function normalizeLandExpense(row) {
+  const rawName = String(row?.name || '').trim()
   const land =
     Boolean(row?.land_tax) ||
-    String(row?.name || '')
-      .trim()
-      .toLowerCase()
-      .includes('земельн') ||
+    rawName.toLowerCase().includes('земельн') ||
     num(row?.land_area) > 0 ||
     num(row?.land_rate) > 0
-  if (!land) return row
+  if (!land) {
+    // Обрывки вроде «н» в payload/Excel не уводим.
+    if (rawName && rawName.length < 2) return { ...row, name: 'Прочий расход' }
+    return row
+  }
   const unit = row.land_unit === 'ha' ? 'ha' : 'm2'
   const area = num(row.land_area)
   const rate = num(row.land_rate)
   const annual = Math.round(area * rate * 1000) / 1000
   return {
     ...row,
-    name: String(row.name || '').trim() || 'Земельный налог',
+    name: rawName.length >= 3 ? rawName : 'Земельный налог',
     land_tax: true,
     land_unit: unit,
     value: annual > 0 ? annual : row.value,
@@ -894,6 +896,147 @@ export function panelRows(form) {
     const months = operating ? (rawMonths === '' || rawMonths === null || rawMonths === undefined ? 1 : Math.max(0, num(rawMonths))) : 1
     return { key, label, operating, base, months, total: base * months, distributed: distributed(form, key) }
   }).filter((row) => row.base > 0)
+}
+
+const CAPEX_DETAIL_SOURCE = {
+  smr: 'smr',
+  overhaul: 'overhaul',
+  ready_premises: 'premises',
+  equipment: 'equipment',
+}
+
+function detailLine(name, amount, note = '') {
+  return { name: String(name || '').trim() || 'Без названия', amount: num(amount), note: String(note || '').trim() }
+}
+
+function isLandExpense(row) {
+  return (
+    Boolean(row?.land_tax) ||
+    num(row?.land_area) > 0 ||
+    num(row?.land_rate) > 0 ||
+    String(row?.name || '')
+      .trim()
+      .toLowerCase()
+      .includes('земельн')
+  )
+}
+
+/** Нормальное имя: обрывки вроде «н» не показываем. */
+function expenseDetailTitle(row, fallback) {
+  const name = String(row?.name || '').trim()
+  if (isLandExpense(row)) {
+    if (!name || name.length < 3) return 'Земельный налог'
+    return name
+  }
+  if (!name || name.length < 2) return fallback
+  return name
+}
+
+function onlyPositiveDetails(lines) {
+  return lines.filter((line) => num(line.amount) > 0)
+}
+
+/** Строки-источники для drawer «Детали» на шаге инвестиций. */
+export function investDetailLines(form, key) {
+  if (CAPEX_DETAIL_SOURCE[key]) {
+    return onlyPositiveDetails(
+      named(form[CAPEX_DETAIL_SOURCE[key]] || []).map((row) => {
+        const bits = []
+        if (num(row.count)) bits.push(`${numberFormat.format(num(row.count))} шт`)
+        if (num(row.price_one)) bits.push(`${numberFormat.format(num(row.price_one))} за ед.`)
+        if (row.already_owned) bits.push('уже куплен')
+        if (filled(row.life_years) || row.life_years === 0) bits.push(`срок ${num(row.life_years)} лет`)
+        return detailLine(row.name, row.price, bits.join(' · '))
+      }),
+    )
+  }
+  if (key === 'wages') {
+    return onlyPositiveDetails(
+      (form.salary || [])
+        .filter((row) => String(row.name || '').trim())
+        .map((row) =>
+          detailLine(
+            row.name,
+            num(row.count) * num(row.salary),
+            `${numberFormat.format(num(row.count))} × ${numberFormat.format(num(row.salary))}`,
+          ),
+        ),
+    )
+  }
+  if (key === 'advertising') {
+    return onlyPositiveDetails(
+      (form.marketing_expenses || [])
+        .filter((row) => String(row.name || '').trim() || num(row.value) > 0)
+        .map((row) =>
+          detailLine(expenseDetailTitle(row, 'Реклама'), row.value, Number(row.period) === 12 ? 'в год' : 'в месяц'),
+        ),
+    )
+  }
+  if (key === 'rental') {
+    return onlyPositiveDetails(
+      (form.admin_expenses || [])
+        .filter((row) => Number(row.type_expense) === 2)
+        .filter((row) => String(row.name || '').trim() || num(row.value) > 0)
+        .map((row) =>
+          detailLine(expenseDetailTitle(row, 'Аренда'), row.value, Number(row.period) === 12 ? 'в год' : 'в месяц'),
+        ),
+    )
+  }
+  if (key === 'other') {
+    return onlyPositiveDetails(
+      (form.admin_expenses || [])
+        .filter((row) => Number(row.type_expense) !== 2)
+        .filter((row) => num(row.value) > 0 || (isLandExpense(row) && num(row.land_area) * num(row.land_rate) > 0))
+        .map((row) => {
+          const bits = []
+          const land = isLandExpense(row)
+          if (land) {
+            const unit = row.land_unit === 'ha' ? 'га' : 'м²'
+            if (num(row.land_area)) bits.push(`${numberFormat.format(num(row.land_area))} ${unit}`)
+            if (num(row.land_rate)) bits.push(`${numberFormat.format(num(row.land_rate))} ₸/${unit}`)
+          }
+          if (Number(row.period) === 12) bits.push('в год')
+          else if (Number(row.period) === 1) bits.push('в месяц')
+          const amount = num(row.value) > 0 ? row.value : num(row.land_area) * num(row.land_rate)
+          return detailLine(expenseDetailTitle(row, land ? 'Земельный налог' : 'Прочий расход'), amount, bits.join(' · '))
+        }),
+    )
+  }
+  if (key === 'raw') {
+    if (form.cost_mode !== 'unit') {
+      return onlyPositiveDetails(
+        (form.variable_other || [])
+          .filter((row) => String(row.name || '').trim() || num(row.value) > 0)
+          .map((row) => detailLine(expenseDetailTitle(row, 'Закуп'), row.value, 'в месяц')),
+      )
+    }
+    const monthly = Number(form.time_param) !== 1
+    const unit = {}
+    const unitNotes = {}
+    for (const row of form.variable_costs || []) {
+      const name = String(row.product || '').trim()
+      if (!name) continue
+      unit[name] = (unit[name] || 0) + num(row.price)
+      const part = String(row.cost_type || '').trim()
+      if (part) unitNotes[name] = unitNotes[name] ? `${unitNotes[name]}; ${part}` : part
+    }
+    return onlyPositiveDetails(
+      (form.volume_sales || [])
+        .map((row) => {
+          const name = String(row.name || '').trim()
+          if (!name) return null
+          const volume = averageMonthlyVolume(row, monthly)
+          const cost = unit[name] || 0
+          const amount = volume * cost
+          if (!(amount > 0)) return null
+          const bits = [`объём ${numberFormat.format(volume)}`, `себест. ${numberFormat.format(cost)}`]
+          if (unitNotes[name]) bits.push(unitNotes[name])
+          return detailLine(name, amount, bits.join(' · '))
+        })
+        .filter(Boolean),
+    )
+  }
+  return []
 }
 
 function capacityOf(source) {

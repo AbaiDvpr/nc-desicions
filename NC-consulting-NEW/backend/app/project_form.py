@@ -507,12 +507,27 @@ def _assets(rows: list[AssetRow], category: str) -> list[AssetIn]:
     return result
 
 
+def _expense_display_name(row: ExpenseRow, fallback: str) -> str:
+    name = (row.name or "").strip()
+    land = bool(row.land_tax) or float(row.land_area or 0) > 0 or float(row.land_rate or 0) > 0 or "земельн" in name.lower()
+    if land:
+        return name if len(name) >= 3 else "Земельный налог"
+    return name if len(name) >= 2 else fallback
+
+
 def _costs(rows: list[ExpenseRow], category: str) -> list[CostIn]:
-    return [
-        CostIn(name=row.name.strip(), category=category, value=row.value, period=_period(row.period))
-        for row in rows
-        if row.name.strip() and row.value
-    ]
+    result: list[CostIn] = []
+    for row in rows:
+        value = float(row.value or 0)
+        if value <= 0 and (float(row.land_area or 0) * float(row.land_rate or 0)) > 0:
+            value = float(row.land_area or 0) * float(row.land_rate or 0)
+        if value <= 0:
+            continue
+        name = _expense_display_name(row, category)
+        if not name:
+            continue
+        result.append(CostIn(name=name, category=category, value=value, period=_period(row.period)))
+    return result
 
 
 def _loans(form: ProjectFormIn, capex_amount: float, operating_amount: float) -> list[LoanIn]:

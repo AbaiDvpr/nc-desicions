@@ -2037,6 +2037,86 @@ a:hover {
   border-top: 1px solid var(--border);
 }
 
+.invest-sheet__action {
+  width: 1%;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.invest-sheet__action .btn {
+  padding: 6px 10px;
+}
+
+.drawer__panel--invest {
+  width: min(520px, 100%);
+}
+
+.invest-detail__summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 0 16px;
+}
+
+.invest-detail__summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.invest-detail__summary span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.invest-detail__summary strong {
+  font-size: 16px;
+}
+
+.invest-detail__formula {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.invest-detail__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.invest-detail__list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border-top: 1px solid var(--border);
+}
+
+.invest-detail__list li:first-child {
+  border-top: 0;
+}
+
+.invest-detail__list li > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.invest-detail__list li b {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 .sales-card__foot {
   display: flex;
   align-items: center;

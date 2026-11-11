@@ -90,6 +90,33 @@ def _num(value) -> float:
         return 0.0
 
 
+def _is_land_expense(item: dict) -> bool:
+    name = str(item.get("name") or "").strip().lower()
+    return (
+        bool(item.get("land_tax"))
+        or _num(item.get("land_area")) > 0
+        or _num(item.get("land_rate")) > 0
+        or "земельн" in name
+    )
+
+
+def _expense_title(item: dict, fallback: str = "Расход") -> str:
+    """Обрывки вроде «н» в Excel не пишем — для земли подставляем нормальное имя."""
+    name = str(item.get("name") or "").strip()
+    if _is_land_expense(item):
+        return name if len(name) >= 3 else "Земельный налог"
+    return name if len(name) >= 2 else fallback
+
+
+def _expense_amount(item: dict) -> float:
+    value = _num(item.get("value"))
+    if value > 0:
+        return value
+    if _is_land_expense(item):
+        return _num(item.get("land_area")) * _num(item.get("land_rate"))
+    return 0.0
+
+
 def _rate(value) -> float:
     number = _num(value)
     return number / 100 if number > 1 else number
@@ -2247,7 +2274,7 @@ class PremisesBook:
             row = 3
             data_rows: list[int] = []
             for title, source in groups:
-                items = [item for item in source if str(item.get("name") or "").strip() or _num(item.get("value"))]
+                items = [item for item in source if _expense_amount(item) > 0]
                 if not items:
                     continue
                 self._put(row, 1, title, font=SECTION)
@@ -2255,12 +2282,12 @@ class PremisesBook:
                 for item in items:
                     raw_period = item.get("period")
                     period = 1 if raw_period in (None, "") else int(_num(raw_period))
-                    name = str(item.get("name") or "Расход").strip() or "Расход"
+                    name = _expense_title(item)
                     land_area = _num(item.get("land_area"))
                     land_rate = _num(item.get("land_rate"))
                     land_unit = str(item.get("land_unit") or "m2").strip().lower()
                     is_ha = land_unit in ("ha", "га", "hectare", "hectares")
-                    is_land = bool(item.get("land_tax")) or land_area > 0 or land_rate > 0 or "земельн" in name.lower()
+                    is_land = _is_land_expense(item)
                     if is_land and (land_area > 0 or land_rate > 0):
                         unit_label = "га" if is_ha else "м²"
                         area_text = f"{land_area:g}".replace(".", ",")
@@ -2270,7 +2297,7 @@ class PremisesBook:
                         amount_value = f"={land_area}*{land_rate}"
                         amount_unit = money_unit
                     else:
-                        amount_value = _num(item.get("value"))
+                        amount_value = _expense_amount(item)
                         amount_unit = money_unit
                     self._put(row, 1, name, border=BOX, wrap=True)
                     self._put(row, 2, amount_unit, border=BOX, align="center")

@@ -23,6 +23,7 @@ import {
   horizonExtension,
   loanSketch,
   num,
+  investDetailLines,
   panelRows,
   planningBounds,
   programBreak,
@@ -1999,6 +2000,7 @@ export function InvestmentStep({ form, set }) {
   const withOwn = Number(form.own_invest) === 1
   const mixed = Number(form.financing) === 4
   const totalsKey = rows.map((row) => `${row.key}:${Math.round(row.total)}`).join('|')
+  const [detailKey, setDetailKey] = useState('')
 
   useEffect(() => {
     const current = panelRows(form)
@@ -2015,6 +2017,15 @@ export function InvestmentStep({ form, set }) {
     if (!amountsMatch(form.attracted, attracted)) set('attracted', attracted)
   }, [totalsKey, withOwn, form, set])
 
+  useEffect(() => {
+    if (!detailKey) return undefined
+    const onKey = (event) => {
+      if (event.key === 'Escape') setDetailKey('')
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [detailKey])
+
   const setMonths = (key, value) => set(`months_${key}`, value)
   const setOwn = (key, value) => set('own', { ...form.own, [key]: value })
   const setCredit = (key, value) => set('credit', { ...form.credit, [key]: value })
@@ -2029,6 +2040,14 @@ export function InvestmentStep({ form, set }) {
   const attractedTotal = rows.reduce((sum, row) => sum + Math.max(0, row.total - (withOwn ? num(form.own[row.key]) : 0)), 0)
   const gap = fullLoadMonth(form)
   const debt = creditSummary(form)
+  const detailRow = rows.find((row) => row.key === detailKey) || null
+  const detailLines = detailRow ? investDetailLines(form, detailRow.key) : []
+  const detailOwn = detailRow && withOwn ? num(form.own[detailRow.key]) : 0
+  const detailCredit = detailRow ? creditOf(detailRow.key) : 0
+  const detailAttracted = detailRow ? Math.max(0, detailRow.total - detailOwn) : 0
+  const detailInvestor = Math.max(0, detailAttracted - detailCredit)
+  const attractedLabel =
+    Number(form.financing) === 2 ? 'Кредит' : Number(form.financing) === 3 ? 'Грант' : 'Привлекаемые'
 
   return (
     <div className="setup">
@@ -2102,6 +2121,7 @@ export function InvestmentStep({ form, set }) {
                   ) : (
                     <th>Привлекаемые</th>
                   )}
+                  <th />
                 </tr>
               </thead>
               <tbody>
@@ -2146,6 +2166,11 @@ export function InvestmentStep({ form, set }) {
                       ) : (
                         <td className="invest-sheet__num">{formatMoney(attracted, sign)}</td>
                       )}
+                      <td className="invest-sheet__action">
+                        <button type="button" className="btn btn--small" onClick={() => setDetailKey(row.key)}>
+                          Детали
+                        </button>
+                      </td>
                     </tr>
                   )
                 })}
@@ -2164,12 +2189,98 @@ export function InvestmentStep({ form, set }) {
                   ) : (
                     <td className="invest-sheet__num">{formatMoney(attractedTotal, sign)}</td>
                   )}
+                  <td />
                 </tr>
               </tfoot>
             </table>
           </div>
         )}
       </SetupRow>
+
+      {detailRow ? (
+        <div className="drawer" role="presentation" onClick={() => setDetailKey('')}>
+          <aside
+            className="drawer__panel drawer__panel--invest"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="invest-detail-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="drawer__body">
+              <div className="drawer__head">
+                <div>
+                  <h2 id="invest-detail-title">Детали</h2>
+                  <p className="muted">{detailRow.label}</p>
+                </div>
+                <button type="button" className="drawer__close" onClick={() => setDetailKey('')} aria-label="Закрыть">
+                  ×
+                </button>
+              </div>
+
+              <div className="invest-detail__summary">
+                <div>
+                  <span>В инвестиции</span>
+                  <strong>{formatMoney(detailRow.total, sign)}</strong>
+                </div>
+                {withOwn ? (
+                  <div>
+                    <span>Свои</span>
+                    <strong>{formatMoney(detailOwn, sign)}</strong>
+                  </div>
+                ) : null}
+                {mixed ? (
+                  <>
+                    <div>
+                      <span>Инвестор</span>
+                      <strong>{formatMoney(detailInvestor, sign)}</strong>
+                    </div>
+                    <div>
+                      <span>Кредит</span>
+                      <strong>{formatMoney(detailCredit, sign)}</strong>
+                    </div>
+                  </>
+                ) : (
+                  <div>
+                    <span>{attractedLabel}</span>
+                    <strong>{formatMoney(detailAttracted, sign)}</strong>
+                  </div>
+                )}
+              </div>
+
+              {detailRow.operating ? (
+                <p className="invest-detail__formula">
+                  {formatMoney(detailRow.base, sign)} в месяц × {detailRow.months} мес. ={' '}
+                  <strong>{formatMoney(detailRow.total, sign)}</strong>
+                </p>
+              ) : (
+                <p className="invest-detail__formula">Сумма из списков активов на шаге «Продажи».</p>
+              )}
+
+              {detailLines.length === 0 ? (
+                <p className="sales-note">Позиций пока нет — сумма собрана без отдельных строк.</p>
+              ) : (
+                <ul className="invest-detail__list">
+                  {detailLines.map((line, index) => (
+                    <li key={`${line.name}-${index}`}>
+                      <div>
+                        <strong>{line.name}</strong>
+                        {line.note ? <span className="muted">{line.note}</span> : null}
+                      </div>
+                      <b>{formatMoney(line.amount, sign)}</b>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {detailRow.operating && detailLines.length > 0 ? (
+                <p className="fm-field__hint">
+                  В таблице выше в инвестиции идёт месячная сумма × число месяцев. Здесь позиции — за один месяц.
+                </p>
+              ) : null}
+            </div>
+          </aside>
+        </div>
+      ) : null}
     </div>
   )
 }
