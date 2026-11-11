@@ -52,6 +52,8 @@ function App() {
               <Route path="counterparties/:id" element={<CounterpartyForm />} />
               <Route path="models" element={<FinModels />} />
               <Route path="models/new" element={<FinModelCreate />} />
+              <Route path="models/:id/plan" element={<Navigate to="/cabinet/models" replace />} />
+              <Route path="models/:id" element={<FinModelCreate />} />
             </Route>
           </Route>
 

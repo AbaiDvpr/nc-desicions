@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Company, FinModel, LedgerEntry, RefillRequest, Tariff, User, UserTariff
 from app.security import clear_admin_cookie, get_current_admin, set_admin_cookie, verify_password
+from app.tariffs import ALMATY, assign_tariff, quota
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -47,8 +48,30 @@ class LedgerRow(BaseModel):
     created_at: datetime
 
 
+class UserQuota(BaseModel):
+    tariff_id: int | None
+    name: str | None
+    period: str | None
+    models_limit: int
+    models_extra: int
+    allowance: int
+    used: int
+    left: int
+    started_at: datetime | None
+    expires_at: datetime | None
+    period_label: str
+
+
 class UserDetail(UserRow):
     ledger: list[LedgerRow]
+    quota: UserQuota
+    model_dates: list[datetime]
+
+
+class TariffAssignIn(BaseModel):
+    tariff_id: int
+    started_on: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    models_extra: int = Field(ge=0, le=10_000)
 
 
 class BalanceIn(BaseModel):
@@ -113,6 +136,34 @@ def _tariff_name(db: Session, user: User) -> str | None:
         return None
     sub = db.get(UserTariff, user.current_tariff_id)
     return sub.name if sub else None
+
+
+def _quota_out(db: Session, user: User) -> UserQuota:
+    state = quota(db, user)
+    sub = state["subscription"]
+    return UserQuota(
+        tariff_id=sub.tariff_id if sub else None,
+        name=sub.name if sub else None,
+        period=sub.period if sub else None,
+        models_limit=sub.models_limit if sub else 0,
+        models_extra=state["extra"],
+        allowance=state["allowance"],
+        used=state["used"],
+        left=0 if state["blocked"] else state["left"],
+        started_at=sub.started_at if sub else None,
+        expires_at=sub.expires_at if sub else None,
+        period_label=state["label"],
+    )
+
+
+def _model_dates(db: Session, user: User) -> list[datetime]:
+    return list(
+        db.scalars(
+            select(FinModel.created_at)
+            .where(FinModel.user_id == user.id, FinModel.status != "draft", FinModel.is_deleted.is_(False))
+            .order_by(FinModel.created_at)
+        ).all()
+    )
 
 
 def _user_row(db: Session, user: User) -> UserRow:
@@ -185,7 +236,7 @@ def user_detail(user_id: int, _: User = Depends(get_current_admin), db: Session 
         select(LedgerEntry).where(LedgerEntry.user_id == user.id).order_by(LedgerEntry.created_at.desc()).limit(12)
     ).all()
     row = _user_row(db, user)
-    return UserDetail(**row.model_dump(), ledger=ledger)
+    return UserDetail(**row.model_dump(), ledger=ledger, quota=_quota_out(db, user), model_dates=_model_dates(db, user))
 
 
 @router.post("/users/{user_id}/balance", response_model=UserDetail)
@@ -205,6 +256,29 @@ def adjust_balance(
     db.add(LedgerEntry(user_id=user.id, amount=signed, comment=body.comment.strip()))
     db.commit()
     db.refresh(user)
+    return user_detail(user_id, _, db)
+
+
+@router.put("/users/{user_id}/tariff", response_model=UserDetail)
+def assign_user_tariff(
+    user_id: int,
+    body: TariffAssignIn,
+    _: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    user = db.get(User, user_id)
+    if user is None or user.is_admin:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
+    tariff = db.get(Tariff, body.tariff_id)
+    if tariff is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Тариф не найден")
+    year, month, day = (int(part) for part in body.started_on.split("-"))
+    try:
+        started = datetime(year, month, day, tzinfo=ALMATY)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Некорректная дата периода") from error
+    assign_tariff(db, user, tariff, charge=False, started_at=started, models_extra=body.models_extra)
+    db.commit()
     return user_detail(user_id, _, db)
 
 

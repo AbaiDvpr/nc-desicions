@@ -1,5 +1,6 @@
 import calendar
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
@@ -7,6 +8,23 @@ from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models import Company, FinModel, LedgerEntry, Tariff, User, UserTariff
+
+ALMATY = ZoneInfo("Asia/Almaty")
+MONTHS = (
+    "",
+    "январь",
+    "февраль",
+    "март",
+    "апрель",
+    "май",
+    "июнь",
+    "июль",
+    "август",
+    "сентябрь",
+    "октябрь",
+    "ноябрь",
+    "декабрь",
+)
 
 PLANS = [
     {
@@ -128,8 +146,78 @@ def _shift(moment: datetime, months: int) -> datetime:
     return moment.replace(year=year, month=month, day=day)
 
 
-def models_used(db: Session, user_id: int) -> int:
-    return db.scalar(select(func.count()).select_from(FinModel).where(FinModel.user_id == user_id)) or 0
+def _aware(moment: datetime) -> datetime:
+    if moment.tzinfo is None:
+        return moment.replace(tzinfo=timezone.utc)
+    return moment
+
+
+def period_bounds(sub: UserTariff, now: datetime | None = None) -> tuple[datetime, datetime, str]:
+    """Окно, в котором тратится лимит. Месячный тариф — текущий месяц, годовой — срок подписки."""
+    now = _aware(now or datetime.now(timezone.utc))
+    started = _aware(sub.started_at)
+    local = now.astimezone(ALMATY)
+    if sub.period == "year":
+        end = _aware(sub.expires_at) if sub.expires_at is not None else _shift(started, 12)
+        label = f"{started.astimezone(ALMATY).strftime('%d.%m.%Y')}–{end.astimezone(ALMATY).strftime('%d.%m.%Y')}"
+        return started, end, label
+    month_start = datetime(local.year, local.month, 1, tzinfo=ALMATY)
+    if local.month == 12:
+        month_end = datetime(local.year + 1, 1, 1, tzinfo=ALMATY)
+    else:
+        month_end = datetime(local.year, local.month + 1, 1, tzinfo=ALMATY)
+    start = max(started, month_start)
+    return start, month_end, f"{MONTHS[local.month]} {local.year}"
+
+
+def models_used(db: Session, user_id: int, start: datetime | None = None, end: datetime | None = None) -> int:
+    query = select(func.count()).select_from(FinModel).where(
+        FinModel.user_id == user_id,
+        FinModel.status != "draft",
+        FinModel.is_deleted.is_(False),
+    )
+    if start is not None:
+        query = query.where(FinModel.created_at >= start)
+    if end is not None:
+        query = query.where(FinModel.created_at < end)
+    return db.scalar(query) or 0
+
+
+def quota(db: Session, user: User, now: datetime | None = None) -> dict:
+    """Сколько моделей можно создать в текущем периоде: лимит тарифа плюс добавка администратора."""
+    now = _aware(now or datetime.now(timezone.utc))
+    sub = current_subscription(db, user)
+    empty = {
+        "subscription": sub,
+        "used": 0,
+        "left": 0,
+        "extra": 0,
+        "allowance": 0,
+        "label": "",
+        "blocked": sub is None or subscription_expired(sub),
+    }
+    if sub is None or subscription_expired(sub):
+        return empty
+    start, end, label = period_bounds(sub, now)
+    if now < start:
+        empty["label"] = label
+        empty["blocked"] = True
+        empty["extra"] = sub.models_extra or 0
+        empty["allowance"] = sub.models_limit + empty["extra"]
+        empty["left"] = empty["allowance"]
+        return empty
+    used = models_used(db, user.id, start, end)
+    extra = sub.models_extra or 0
+    allowance = sub.models_limit + extra
+    return {
+        "subscription": sub,
+        "used": used,
+        "left": max(allowance - used, 0),
+        "extra": extra,
+        "allowance": allowance,
+        "label": label,
+        "blocked": False,
+    }
 
 
 def current_subscription(db: Session, user: User) -> UserTariff | None:
@@ -162,16 +250,16 @@ def ensure_can_create_company(db: Session, user: User) -> None:
 
 
 def ensure_can_create_model(db: Session, user: User) -> None:
-    sub = current_subscription(db, user)
-    if sub is None or subscription_expired(sub):
+    state = quota(db, user)
+    if state["blocked"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="По вашему тарифу сейчас нельзя создать финансовую модель",
         )
-    if models_used(db, user.id) >= sub.models_limit:
+    if state["used"] >= state["allowance"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="По вашему тарифу вы исчерпали возможность рассчитывать финансовые модели",
+            detail="По вашему тарифу вы исчерпали возможность рассчитывать финансовые модели за этот период",
         )
 
 
@@ -182,8 +270,16 @@ def assign_default(db: Session, user: User) -> UserTariff:
     return assign_tariff(db, user, basic, charge=False)
 
 
-def assign_tariff(db: Session, user: User, tariff: Tariff, *, charge: bool) -> UserTariff:
-    now = datetime.now(timezone.utc)
+def assign_tariff(
+    db: Session,
+    user: User,
+    tariff: Tariff,
+    *,
+    charge: bool,
+    started_at: datetime | None = None,
+    models_extra: int = 0,
+) -> UserTariff:
+    now = _aware(started_at or datetime.now(timezone.utc))
     expires = None
     if not tariff.is_default:
         expires = _shift(now, 12 if tariff.period == "year" else 1)
@@ -195,6 +291,7 @@ def assign_tariff(db: Session, user: User, tariff: Tariff, *, charge: bool) -> U
         period=tariff.period,
         price=tariff.price,
         models_limit=tariff.models_limit,
+        models_extra=max(0, int(models_extra)),
         edits_limit=tariff.edits_limit,
         features=list(tariff.features),
         started_at=now,

@@ -21,7 +21,7 @@ export const STEPS = [
   {
     label: 'Инвестиции',
     title: 'Собственные и привлекаемые средства',
-    description: 'Разделите суммы по видам затрат между собственными вложениями и привлекаемым финансированием.',
+    description: 'Суммы уже собраны из предыдущих шагов. Здесь видно, на что нужны деньги, и сколько из них ваши.',
     result: 'Структура финансирования',
   },
 ]
@@ -64,6 +64,7 @@ export const FINANCING = [
   [1, 'долевое финансирование (инвестор)'],
   [2, 'долговое (кредитное) финансирование'],
   [3, 'грантовое финансирование'],
+  [4, 'инвестор и кредит'],
 ]
 
 export const UNITS = [
@@ -93,6 +94,12 @@ export const MONTH_OPTIONS = [
   [10, 'Окт'],
   [11, 'Ноя'],
   [12, 'Дек'],
+]
+
+export const OTHER_INCOME_PERIODS = [
+  [1, 'Ежемесячно'],
+  [2, 'Ежегодно'],
+  [3, 'Разово'],
 ]
 
 export const PERIODS = [
@@ -132,19 +139,11 @@ export const ADMIN_PRESETS = [
   ['Банковское обслуживание', 0],
   ['Услуги третьих лиц (аутсорсинг)', 0],
   ['Коммунальные расходы', 0],
-  ['Земельный налог', 0],
   ['Командировочные расходы', 0],
   ['Транспортные расходы', 0],
 ]
 
 export const MARKETING_PRESETS = ['Контекстная реклама', 'Таргетированная реклама']
-
-function monthShift(offset) {
-  const date = new Date()
-  date.setDate(1)
-  date.setMonth(date.getMonth() + offset)
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-}
 
 export const emptyAmounts = () => ({
   smr: '',
@@ -165,65 +164,116 @@ export const newVolume = () => ({
   seasonal: false,
   months: [],
   price: '',
+  sales_start: '',
+  own_capacity: false,
+  planned_capacity: {},
 })
 
-export const newAsset = () => ({
-  name: '',
-  count: '',
-  price_one: '',
-  price: '',
-  year: '',
-  life_years: '',
-})
+/** Новая строка актива. Дефолты года/дат — с начала проекта (planning_from), срок службы не заполняем. */
+export const newAsset = (defaults = {}) => {
+  const startMonth = String(defaults.start || defaults.pay_month || '').slice(0, 7)
+  const year = defaults.year != null && defaults.year !== ''
+    ? String(defaults.year)
+    : startMonth
+      ? startMonth.slice(0, 4)
+      : ''
+  return {
+    name: '',
+    count: '1',
+    price_one: '',
+    price: '',
+    year,
+    life_years: '',
+    pay_month: startMonth,
+    commission_month: startMonth,
+    already_owned: false,
+    book_value: '',
+  }
+}
 
 export const newVariableCost = () => ({ product: '', cost_type: '', price: '' })
 
-export const newExpense = (name = '', typeExpense = 0) => ({
-  name,
-  value: '',
-  invest: false,
-  period: 1,
-  type_expense: typeExpense,
-})
+export const isLandTaxName = (name) => String(name || '').trim().toLowerCase().includes('земельн')
+
+/** Участок на вкладке «Земельный налог»: явный флаг, имя можно менять свободно. */
+export const isLandTaxRow = (row) => Boolean(row?.land_tax) || isLandTaxName(row?.name)
+
+export const LAND_AREA_UNITS = [
+  ['m2', 'м²'],
+  ['ha', 'га'],
+]
+
+export const newExpense = (name = '', typeExpense = 0, opts = {}) => {
+  const land = Boolean(opts.land) || isLandTaxName(name)
+  return {
+    name,
+    value: '',
+    invest: false,
+    period: land ? 12 : 1,
+    type_expense: typeExpense,
+    land_tax: land,
+    land_unit: opts.land_unit === 'ha' ? 'ha' : 'm2',
+    land_area: '',
+    land_rate: '',
+  }
+}
 
 export const newSalary = () => ({
   invest: false,
   name: '',
-  count: '',
+  count: '1',
   salary: '',
   percent: '',
   industrial: 0,
+  opv_exempt: false,
+  so_exempt: false,
+  opvr_exempt: false,
+  osms_exempt: false,
   services: [],
 })
 
 export function initialForm() {
   return {
     name: '',
-    legal_form: 1,
-    nds: 0,
-    tax_regime: 1,
-    currency: 'kzt',
-    time_param: 3,
-    schedule: 1,
-    planning_from: monthShift(0),
-    planning_to: monthShift(36),
+    legal_form: '',
+    nds: '',
+    tax_regime: '',
+    tax_simplified_rate: '',
+    tax_cit_rate: '',
+    vat_rate: '',
+    vosms_rate: '',
+    social_tax_rate: '',
+    currency: '',
+    time_param: '',
+    schedule: '',
+    planning_from: '',
+    planning_to: '',
 
     financing: 1,
     investor_term: '',
     investor_dividend: '',
+    risk_premium: '',
     loan_term: '',
     loan_grace: '',
     loan_rate: '',
+    loan_bank_rate: '',
+    loan_subsidy_rate: '',
+    loan_subsidy_term: '',
+    loan_nbk_plus_4: false,
     loan_annuity: false,
     wc_term: '',
     wc_grace: '',
     wc_rate: '',
+    gov_program: null,
+    gov_guarantee: null,
 
     sales_start: '',
     planned_volume: '',
     volume_sales: [newVolume()],
     planned_capacity: {},
     other_income: '',
+    other_income_start: '',
+    other_income_period: 1,
     equipment: [],
     premises: [],
     smr: [],
@@ -239,6 +289,7 @@ export function initialForm() {
     own_invest: 0,
     own: emptyAmounts(),
     attracted: emptyAmounts(),
+    credit: emptyAmounts(),
     months_raw: 1,
     months_wages: 1,
     months_advertising: 1,

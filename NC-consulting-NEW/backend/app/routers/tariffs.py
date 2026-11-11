@@ -8,7 +8,7 @@ from app.database import get_db
 from app.models import LedgerEntry, Tariff, User, UserTariff
 from app.schemas import TariffBuyIn, TariffCurrentOut, TariffOut
 from app.security import get_current_user
-from app.tariffs import assign_tariff, models_used, subscription_expired
+from app.tariffs import assign_tariff, quota, subscription_expired
 
 router = APIRouter(prefix="/api/tariffs", tags=["tariffs"])
 
@@ -32,18 +32,17 @@ def list_tariffs(
 @router.get("/current", response_model=TariffCurrentOut)
 def current_tariff(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     sub = db.get(UserTariff, user.current_tariff_id) if user.current_tariff_id else None
-    used = models_used(db, user.id)
+    state = quota(db, user)
+    used = state["used"]
     now = datetime.now(timezone.utc)
-    left = 0
+    left = 0 if state["blocked"] else state["left"]
     days_left = None
     progress = 100
-    if sub is not None:
-        left = max(sub.models_limit - used, 0)
-        if sub.expires_at is not None:
-            total = (sub.expires_at - sub.started_at).total_seconds() or 1
-            passed = (now - sub.started_at).total_seconds()
-            progress = max(0, min(100, round(100 - passed / total * 100)))
-            days_left = max(0, round((sub.expires_at - now).total_seconds() / 86400))
+    if sub is not None and sub.expires_at is not None:
+        total = (sub.expires_at - sub.started_at).total_seconds() or 1
+        passed = (now - sub.started_at).total_seconds()
+        progress = max(0, min(100, round(100 - passed / total * 100)))
+        days_left = max(0, round((sub.expires_at - now).total_seconds() / 86400))
 
     history = db.scalars(
         select(LedgerEntry).where(LedgerEntry.user_id == user.id).order_by(LedgerEntry.id.desc())
@@ -52,6 +51,9 @@ def current_tariff(user: User = Depends(get_current_user), db: Session = Depends
         balance=user.balance,
         models_used=used,
         models_left=left,
+        models_extra=state["extra"],
+        models_allowance=state["allowance"],
+        period_label=state["label"],
         expired=subscription_expired(sub),
         days_left=days_left,
         expire_progress=progress,

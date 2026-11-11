@@ -48,7 +48,13 @@ export default function Tariff() {
   }, [])
 
   const sub = data?.subscription
-  const modelPercent = sub ? Math.round((data.models_left / sub.models_limit) * 100) : 0
+  const allowance = data?.models_allowance || sub?.models_limit || 0
+  const modelPercent = allowance ? Math.round((data.models_left / allowance) * 100) : 0
+  const usedHint = data
+    ? `Использовано за ${data.period_label || 'период'}: ${data.models_used}.${
+        data.models_extra ? ` Лимит ${sub?.models_limit || 0}, добавка ${data.models_extra}.` : ''
+      }`
+    : ''
 
   return (
     <div className="page tariff">
@@ -88,9 +94,9 @@ export default function Tariff() {
           <section className="tariff-meters">
             <Meter
               label="Моделей осталось"
-              value={`${data.models_left} из ${sub.models_limit}`}
+              value={`${data.models_left} из ${allowance}`}
               percent={modelPercent}
-              hint={`Использовано: ${data.models_used}`}
+              hint={usedHint}
             />
             <Meter
               label="Срок"

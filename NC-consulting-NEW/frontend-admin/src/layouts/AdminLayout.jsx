@@ -8,6 +8,10 @@ const LINKS = [
   { to: '/companies', label: 'Управленческий учёт' },
   { to: '/tariffs', label: 'Тарифы' },
   { to: '/refills', label: 'Запросы на пополнение' },
+  { to: '/bp', label: 'Бизнес-план', end: true },
+  { to: '/bp/jobs', label: 'Сборки' },
+  { to: '/fem-rates', label: 'Ставки FEM' },
+  { to: '/gov-programs', label: 'Госпрограммы' },
 ]
 
 export default function AdminLayout({ admin, onLogout }) {

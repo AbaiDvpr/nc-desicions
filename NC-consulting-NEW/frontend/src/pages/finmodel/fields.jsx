@@ -1,4 +1,4 @@
-import { useId } from 'react'
+import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { OTHER } from './helpers.js'
 
 const MONTHS = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек']
@@ -20,16 +20,20 @@ function TrashIcon() {
   )
 }
 
-export function Field({ label, required, hint, wide, group, children }) {
+export function Field({ label, required, hint, wide, group, className = '', error = false, field, children }) {
   const Tag = group ? 'div' : 'label'
   return (
-    <Tag className={`fm-field ${wide ? 'fm-field--wide' : ''}`} role={group ? 'group' : undefined}>
+    <Tag
+      className={`fm-field ${wide ? 'fm-field--wide' : ''} ${error ? 'fm-field--error' : ''} ${className}`.trim()}
+      role={group ? 'group' : undefined}
+      data-field={field || undefined}
+    >
       <span className="fm-field__label">
         {label}
         {required && <span className="fm-field__required"> *</span>}
       </span>
       {children}
-      {hint && <span className="fm-field__hint">{hint}</span>}
+      {hint ? <span className={`fm-field__hint ${error ? 'fm-field__hint--error' : ''}`}>{hint}</span> : null}
     </Tag>
   )
 }
@@ -42,21 +46,138 @@ export function TextArea({ value, onChange, rows = 3, ...props }) {
   return <textarea rows={rows} maxLength={5000} value={value} onChange={(e) => onChange(e.target.value)} {...props} />
 }
 
-export function NumberInput({ value, onChange, suffix, signed, integer, max, ...props }) {
+const MAX_FRAC = 3
+
+function parseNumberText(text, { integer, signed, max }) {
+  let source = String(text).replace(/[\s\u00a0\u202f]/g, '').replace(',', '.')
+  const neg = Boolean(signed && source.trim().startsWith('-'))
+  source = source.replace(/-/g, '')
+  let next = ''
+  if (integer) {
+    next = source.replace(/\D/g, '').replace(/^0+(?=\d)/, '')
+  } else {
+    source = source.replace(/[^\d.]/g, '')
+    const dot = source.indexOf('.')
+    if (dot !== -1) source = source.slice(0, dot + 1) + source.slice(dot + 1).replace(/\./g, '')
+    const [whole, frac = ''] = source.split('.')
+    const wholeClean = (whole || '').replace(/^0+(?=\d)/, '')
+    const fracClean = frac.slice(0, MAX_FRAC)
+    next = source.includes('.') ? `${wholeClean === '' ? '0' : wholeClean}.${fracClean}` : wholeClean
+  }
+  if (neg && next) next = `-${next}`
+  if (max != null && next !== '' && next !== '-' && Number(next) > Number(max)) next = String(max)
+  return next
+}
+
+/** Пока печатаем — без тысяч; запятая как в RU. После blur — с группировкой. */
+function formatGrouped(value, grouped) {
+  if (value === '' || value === null || value === undefined) return ''
+  const text = String(value)
+  const neg = text.startsWith('-')
+  const body = neg ? text.slice(1) : text
+  const dot = body.indexOf('.')
+  const whole = dot === -1 ? body : body.slice(0, dot)
+  const frac = dot === -1 ? null : body.slice(dot + 1)
+  const groupedWhole = grouped ? whole.replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0') : whole
+  const fracPart = frac == null ? '' : `,${frac}`
+  return `${neg ? '-' : ''}${groupedWhole}${fracPart}`
+}
+
+/** Курсор: цифры + факт «уже прошли разделитель» — иначе после «82,» прыгает перед запятую. */
+function caretScore(text, caret) {
+  const before = String(text).slice(0, caret)
+  let digits = 0
+  let sep = 0
+  for (const ch of before) {
+    if (/\d/.test(ch)) digits += 1
+    else if ((ch === ',' || ch === '.') && sep === 0) sep = 1
+  }
+  return { digits, sep }
+}
+
+function placeCaret(formatted, score) {
+  if (!score || (score.digits <= 0 && score.sep <= 0)) {
+    return formatted.startsWith('-') ? 1 : 0
+  }
+  let digits = 0
+  let sep = 0
+  for (let index = 0; index < formatted.length; index += 1) {
+    const ch = formatted[index]
+    if (/\d/.test(ch)) digits += 1
+    else if ((ch === ',' || ch === '.') && sep === 0) sep = 1
+    else continue
+    if (digits === score.digits && sep === score.sep) return index + 1
+  }
+  return formatted.length
+}
+
+export function NumberInput({ value, onChange, suffix, signed, integer, max, group = true, ...props }) {
+  const ref = useRef(null)
+  const caretRef = useRef(null)
+  const [focused, setFocused] = useState(false)
+  // В фокусе без группировки тысяч — удобнее набирать 82,50 и крупные суммы.
+  const display = formatGrouped(value, group && !focused)
+
+  useLayoutEffect(() => {
+    const input = ref.current
+    if (!input || caretRef.current == null || document.activeElement !== input) return
+    const pos = placeCaret(input.value, caretRef.current)
+    input.setSelectionRange(pos, pos)
+    caretRef.current = null
+  })
+
   return (
     <div className="fm-input-suffix">
       <input
-        type="number"
-        inputMode={integer ? 'numeric' : 'decimal'}
-        min={signed ? undefined : 0}
-        max={max}
-        step={integer ? 1 : 'any'}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onWheel={(e) => e.currentTarget.blur()}
         {...props}
+        ref={ref}
+        type="text"
+        inputMode={integer ? 'numeric' : 'decimal'}
+        autoComplete="off"
+        value={display}
+        onFocus={(event) => {
+          setFocused(true)
+          props.onFocus?.(event)
+        }}
+        onBlur={(event) => {
+          setFocused(false)
+          props.onBlur?.(event)
+        }}
+        onChange={(e) => {
+          const raw = e.target.value
+          const caret = e.target.selectionStart ?? raw.length
+          caretRef.current = caretScore(raw, caret)
+          onChange(parseNumberText(raw, { integer, signed, max }))
+        }}
       />
       {suffix && <span className="fm-input-suffix__text">{suffix}</span>}
+    </div>
+  )
+}
+
+export function Choice({ value, onChange, options, pair = false, required = false }) {
+  const pairs = options.map((option) => (Array.isArray(option) ? option : [option, option]))
+  const chosen = value === '' || value === null || value === undefined ? '' : String(value)
+  return (
+    <div className={`fm-choice ${pair ? 'fm-choice--pair' : ''}`} role="radiogroup">
+      {required && (
+        <input className="fm-choice__value" tabIndex={-1} aria-hidden="true" required readOnly value={chosen} />
+      )}
+      {pairs.map(([optionValue, label]) => {
+        const active = String(value) === String(optionValue)
+        return (
+          <button
+            key={optionValue}
+            type="button"
+            className={`fm-choice__item ${active ? 'fm-choice__item--active' : ''}`}
+            aria-pressed={active}
+            onClick={() => onChange(optionValue)}
+          >
+            {pair && <span className="fm-choice__mark" />}
+            <span>{label}</span>
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -147,6 +268,20 @@ export function Checkbox({ value, onChange, label }) {
     <label className="fm-checkbox">
       <input type="checkbox" checked={value} onChange={(e) => onChange(e.target.checked)} />
       {label}
+    </label>
+  )
+}
+
+export function Toggle({ value, onChange, label }) {
+  const on = value === true || value === 1 || value === '1'
+  const input = (
+    <input className="fm-toggle__input" type="checkbox" role="switch" checked={on} onChange={(e) => onChange(e.target.checked)} />
+  )
+  if (!label) return input
+  return (
+    <label className="fm-toggle">
+      <span>{label}</span>
+      {input}
     </label>
   )
 }

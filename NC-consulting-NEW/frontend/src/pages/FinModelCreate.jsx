@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { api, finModelFiles } from '../api.js'
-import { ExcelIcon, WordIcon } from '../components/FileIcons.jsx'
-import { capexProblem, toPayload } from './finmodel/helpers.js'
-import { STEPS, initialForm } from './finmodel/options.js'
+import { useEffect, useRef, useState } from 'react'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { api } from '../api.js'
+import ExcelDownloads from '../components/ExcelDownloads.jsx'
+import Toast from '../components/Toast.jsx'
+import { draftProgress, stepAnchor, stepAssetTab, stepField, stepProblem, toPayload } from './finmodel/helpers.js'
+import { STEPS, initialForm, newVolume } from './finmodel/options.js'
 import { CompanyStep, ExpensesStep, InvestmentStep, SalesStep } from './finmodel/steps.jsx'
 
 const STEP_COMPONENTS = [CompanyStep, SalesStep, ExpensesStep, InvestmentStep]
@@ -33,6 +34,14 @@ function ArrowLeftIcon() {
   )
 }
 
+function ArrowRightIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 12h14M12 5l7 7-7 7" />
+    </svg>
+  )
+}
+
 function SparkIcon() {
   return (
     <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
@@ -42,18 +51,26 @@ function SparkIcon() {
   )
 }
 
-function Stepper({ current }) {
+function Stepper({ current, reached, onPick }) {
   return (
     <ol className="stepper">
       {STEPS.map((step, index) => {
-        const state = index < current ? 'done' : index === current ? 'active' : 'upcoming'
+        const state = index === current ? 'active' : index <= reached ? 'done' : 'upcoming'
+        const open = index <= reached && index < STEPS.length
         return (
           <li key={step.label} className={`stepper__item stepper__item--${state}`}>
-            <div className="stepper__circle">{state === 'done' ? <CheckIcon /> : index + 1}</div>
-            <div className="stepper__label">
-              <span className="stepper__caption">Шаг {index + 1}</span>
-              {step.label}
-            </div>
+            <button
+              type="button"
+              className="stepper__jump"
+              disabled={!open || index === current}
+              onClick={() => onPick(index)}
+            >
+              <div className="stepper__circle">{state === 'done' ? <CheckIcon /> : index + 1}</div>
+              <div className="stepper__label">
+                <span className="stepper__caption">Шаг {index + 1}</span>
+                {step.label}
+              </div>
+            </button>
           </li>
         )
       })}
@@ -61,7 +78,65 @@ function Stepper({ current }) {
   )
 }
 
-function Generation({ model, error, onRetry, onEdit }) {
+function asDate(value) {
+  const text = String(value || '')
+  if (/^\d{4}-\d{2}$/.test(text)) return `${text}-01`
+  return text
+}
+
+function blankCapacity(saved) {
+  const source = saved || {}
+  const values = Object.values(source)
+  if (values.length > 0 && values.every((value) => !Number(value))) return {}
+  return { ...source }
+}
+
+function emptyRate(value) {
+  return value === '' || value === null || value === undefined
+}
+
+/** Подставить дефолты справочника только в пустые поля ставок. */
+export function withRateDefaults(form, rates) {
+  if (!rates) return form
+  const next = { ...form }
+  const too = Number(next.legal_form) === 2
+  if (emptyRate(next.tax_simplified_rate)) {
+    next.tax_simplified_rate = too
+      ? (rates.simplified_too_rate ?? rates.simplified_rate)
+      : (rates.simplified_ip_rate ?? rates.simplified_rate)
+  }
+  if (emptyRate(next.vat_rate)) next.vat_rate = rates.vat_rate
+  if (emptyRate(next.vosms_rate)) next.vosms_rate = rates.vosms_rate
+  if (emptyRate(next.social_tax_rate)) next.social_tax_rate = rates.social_tax_rate
+  if (emptyRate(next.tax_cit_rate)) {
+    next.tax_cit_rate = too ? rates.cit_too_rate : rates.cit_ip_rate
+  }
+  return next
+}
+
+function restoreForm(saved, rates) {
+  const base = initialForm()
+  const merged = {
+    ...base,
+    ...saved,
+    planning_from: asDate(saved.planning_from),
+    planning_to: asDate(saved.planning_to),
+    sales_start: asDate(saved.sales_start),
+    planned_volume: asDate(saved.planned_volume),
+    other_income_start: asDate(saved.other_income_start),
+    other_income_period: saved.other_income_period || 1,
+    own: { ...base.own, ...(saved.own || {}) },
+    attracted: { ...base.attracted, ...(saved.attracted || {}) },
+    credit: { ...base.credit, ...(saved.credit || {}) },
+    planned_capacity: blankCapacity(saved.planned_capacity),
+    volume_sales: saved.volume_sales?.length
+      ? saved.volume_sales.map((row) => ({ ...newVolume(), ...row, sales_start: asDate(row.sales_start) }))
+      : base.volume_sales,
+  }
+  return withRateDefaults(merged, rates)
+}
+
+function Generation({ model, error, onRetry, onEdit, editing }) {
   const [stage, setStage] = useState(0)
   const last = GENERATION_STAGES.length - 1
   const done = stage > last
@@ -91,7 +166,6 @@ function Generation({ model, error, onRetry, onEdit }) {
   }
 
   const progress = Math.round((stage / GENERATION_STAGES.length) * 100)
-  const files = model && finModelFiles(model.id)
 
   return (
     <div className="card generation">
@@ -102,7 +176,7 @@ function Generation({ model, error, onRetry, onEdit }) {
       <h2>{done ? 'Отчёт готов' : 'Генерируем через NC-AI'}</h2>
       <p className="muted">
         {done
-          ? `Финансовая модель «${model.name}» сохранена. Скачайте бизнес-план в Word или модель в Excel.`
+          ? `Финансовая модель «${model.name}» ${editing ? 'обновлена' : 'сохранена'}. Фин модель можно скачать. Бизнес-план запрашивается кнопкой «Бизнес-план» в списке.`
           : 'Собираем для вас помесячную финансовую модель. Это займёт несколько секунд.'}
       </p>
 
@@ -124,17 +198,13 @@ function Generation({ model, error, onRetry, onEdit }) {
 
       {done && (
         <div className="generation__actions">
+          <button type="button" className="btn" onClick={onEdit}>
+            Изменить данные
+          </button>
           <Link to="/cabinet/models" className="btn">
             К фин моделям
           </Link>
-          <a href={files.word} download className="btn btn--primary">
-            <WordIcon />
-            Скачать Word
-          </a>
-          <a href={files.excel} download className="btn btn--excel">
-            <ExcelIcon />
-            Скачать Excel
-          </a>
+          <ExcelDownloads id={model.id} />
         </div>
       )}
     </div>
@@ -142,50 +212,233 @@ function Generation({ model, error, onRetry, onEdit }) {
 }
 
 export default function FinModelCreate() {
+  const { id: routeId } = useParams()
+  const navigate = useNavigate()
+  const editing = Boolean(routeId)
+  const [params] = useSearchParams()
+  const requestedDraft = editing ? null : params.get('draft')
   const [current, setCurrent] = useState(0)
+  const [reached, setReached] = useState(0)
   const [form, setForm] = useState(initialForm)
+  const [draftId, setDraftId] = useState(requestedDraft ? Number(requestedDraft) : null)
+  const [savedId, setSavedId] = useState(editing ? Number(routeId) : null)
+  const [updated, setUpdated] = useState(editing)
   const [model, setModel] = useState(null)
   const [error, setError] = useState('')
   const [attempt, setAttempt] = useState(0)
-  const [notice, setNotice] = useState('')
+  const [notice, setNotice] = useState(null)
+  const [offer, setOffer] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [loadingDraft, setLoadingDraft] = useState(Boolean(requestedDraft || editing))
+  const [loadError, setLoadError] = useState('')
+  const [rateDefaults, setRateDefaults] = useState(null)
+  const ratesRef = useRef(null)
   const generating = current >= STEPS.length
   const isLast = current === STEPS.length - 1
   const step = STEPS[current]
   const StepFields = STEP_COMPONENTS[current]
 
   const set = (key, value) => setForm((currentForm) => ({ ...currentForm, [key]: value }))
+  const showNotice = (tone, text) => setNotice({ tone, text, id: Date.now() })
+
+  useEffect(() => {
+    let cancel = false
+    const fallback = {
+      simplified_rate: 4,
+      simplified_ip_rate: 4,
+      simplified_too_rate: 4,
+      cit_ip_rate: 10,
+      cit_too_rate: 20,
+      vat_rate: 16,
+      vosms_rate: 2,
+      social_tax_rate: 6,
+      nbk_bank_spread: 4,
+    }
+    api
+      .femRates()
+      .then((rates) => {
+        if (cancel) return
+        ratesRef.current = rates
+        setRateDefaults(rates)
+        setForm((current) => withRateDefaults(current, rates))
+      })
+      .catch(() => {
+        if (cancel) return
+        ratesRef.current = fallback
+        setRateDefaults(fallback)
+        setForm((current) => withRateDefaults(current, fallback))
+      })
+    return () => {
+      cancel = true
+    }
+  }, [])
+
+  const syncDraftUrl = (id) => {
+    if (editing || !id) return
+    const currentDraft = params.get('draft')
+    if (String(currentDraft || '') === String(id)) return
+    navigate(`/cabinet/models/new?draft=${id}`, { replace: true })
+  }
+
+  /** Черновик при создании (не архив). Для редактирования ready-модели не вызываем. */
+  const persistDraft = async ({ nextReached } = {}) => {
+    if (editing) return null
+    // Индексы шагов 0..3; на «Собрать» next=4 — не слать reached_step=5 (API le=4).
+    const lastIndex = STEPS.length - 1
+    const effectiveReached = Math.min(lastIndex, Math.max(reached, nextReached ?? reached))
+    const progress = draftProgress(form, effectiveReached)
+    const payload = {
+      form,
+      completed_steps: Math.min(STEPS.length, progress.complete),
+      reached_step: Math.min(STEPS.length, Math.max(1, effectiveReached + 1)),
+    }
+    const saved = draftId ? await api.updateDraft(draftId, payload) : await api.saveDraft(payload)
+    setDraftId(saved.id)
+    syncDraftUrl(saved.id)
+    return { saved, progress }
+  }
+
+  useEffect(() => {
+    if (!editing) return undefined
+    let cancel = false
+    api
+      .getFinModel(routeId)
+      .then((detail) => {
+        if (cancel) return
+        setForm(restoreForm(detail.form, ratesRef.current))
+        setSavedId(detail.id)
+        setReached(STEPS.length - 1)
+        setCurrent(0)
+      })
+      .catch((err) => {
+        if (!cancel) setLoadError(err.message)
+      })
+      .finally(() => {
+        if (!cancel) setLoadingDraft(false)
+      })
+    return () => {
+      cancel = true
+    }
+  }, [editing, routeId])
+
+  useEffect(() => {
+    if (!requestedDraft) return undefined
+    let cancel = false
+    api
+      .getDraft(requestedDraft)
+      .then((draft) => {
+        if (cancel) return
+        setForm(restoreForm(draft.form, ratesRef.current))
+        setDraftId(draft.id)
+        const opened = Math.max(0, Math.min((draft.reached_step || 1) - 1, STEPS.length - 1))
+        const resume = Math.max(0, Math.min(draft.completed_steps || 0, STEPS.length - 1))
+        setReached(opened)
+        setCurrent(draft.completed_steps < draft.reached_step ? resume : opened)
+      })
+      .catch((err) => {
+        if (!cancel) showNotice('error', err.message)
+      })
+      .finally(() => {
+        if (!cancel) setLoadingDraft(false)
+      })
+    return () => {
+      cancel = true
+    }
+  }, [requestedDraft])
 
   const goTo = (index) => {
+    setOffer(null)
     setCurrent(index)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const generate = async () => {
+    setUpdated(Boolean(savedId))
     setModel(null)
     setError('')
     setAttempt((a) => a + 1)
     try {
-      setModel(await api.createFinModel(toPayload(form)))
+      const payload = toPayload(form)
+      const saved = savedId
+        ? await api.updateFinModel(savedId, payload)
+        : await api.createFinModel(payload, draftId)
+      setSavedId(saved.id)
+      setModel(saved)
     } catch (err) {
       setError(err.message)
     }
   }
 
-  const handleSubmit = (event) => {
+  const saveDraft = async () => {
+    setSaving(true)
+    try {
+      const result = await persistDraft({ nextReached: reached })
+      const progress = result?.progress || draftProgress(form, reached)
+      if (progress.blocked !== null) {
+        setOffer({ steps: progress.complete, blocked: progress.blocked })
+        const text =
+          progress.complete < 1
+            ? 'Черновик сохранён. Шаг 1 ещё нужно заполнить.'
+            : `Черновик сохранён до шага ${progress.complete}. Шаг ${progress.blocked + 1} заполнен не полностью.`
+        showNotice('ok', text)
+      } else {
+        setOffer(null)
+        const text =
+          progress.complete === 1 ? 'Черновик сохранён: шаг 1.' : `Черновик сохранён: шаги 1–${progress.complete}.`
+        showNotice('ok', text)
+      }
+    } catch (err) {
+      showNotice('error', err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleSubmit = async (event) => {
     event.preventDefault()
     if (form.planning_to < form.planning_from) {
-      setNotice('Дата окончания проекта раньше даты начала')
+      showNotice('error', 'Дата окончания проекта раньше даты начала')
       return
     }
-    if (isLast) {
-      const problem = capexProblem(form)
-      if (problem) {
-        setNotice(problem)
+    const problem = stepProblem(form, current)
+    if (problem) {
+      showNotice('error', problem)
+      const anchor = stepAnchor(form, current)
+      const field = stepField(form, current)
+      const assetTab = stepAssetTab(form, current)
+      if (anchor) {
+        window.dispatchEvent(new CustomEvent('fm-show-panel', { detail: anchor }))
+      }
+      if (assetTab) {
+        window.dispatchEvent(new CustomEvent('fm-asset-tab', { detail: assetTab }))
+      }
+      if (field) {
+        window.dispatchEvent(new CustomEvent('fm-highlight-field', { detail: field }))
+      }
+      requestAnimationFrame(() => {
+        const target =
+          (field && document.querySelector(`[data-field="${field}"]`)) ||
+          (anchor && document.querySelector(`[data-section="${anchor}"]`))
+        target?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      })
+      return
+    }
+    setNotice(null)
+    setOffer(null)
+    const next = current + 1
+    if (!editing) {
+      setSaving(true)
+      try {
+        await persistDraft({ nextReached: Math.max(reached, next) })
+      } catch (err) {
+        showNotice('error', err.message || 'Не удалось сохранить черновик')
+        setSaving(false)
         return
       }
+      setSaving(false)
     }
-    setNotice('')
-    goTo(current + 1)
+    setReached((value) => Math.max(value, next))
+    goTo(next)
     if (isLast) generate()
   }
 
@@ -202,51 +455,102 @@ export default function FinModelCreate() {
       </Link>
 
       <header className="page__header">
-        <h1>Новая фин модель</h1>
-        <p className="muted">Заполните 4 шага — NC-AI соберёт помесячную модель и бизнес-план</p>
+        <h1>{editing ? 'Редактирование фин модели' : 'Новая фин модель'}</h1>
+        <p className="muted">
+          {editing
+            ? 'Пройдите по шагам, поправьте данные и сохраните. Фин модель соберётся заново. Бизнес-план запрашивается в списке.'
+            : 'Заполните 4 шага — NC-AI соберёт помесячную модель. Бизнес-план потом запрашивается в списке.'}
+        </p>
       </header>
 
-      <Stepper current={current} />
+      <Stepper current={current} reached={reached} onPick={goTo} />
+
+      <Toast
+        key={notice?.id}
+        message={notice?.text || ''}
+        tone={notice?.tone === 'ok' ? 'ok' : 'error'}
+        place="top"
+        duration={4500}
+        onClose={() => setNotice(null)}
+      />
 
       {generating ? (
         <Generation
           key={attempt}
           model={model}
           error={error}
+          editing={updated}
           onRetry={generate}
           onEdit={() => goTo(STEPS.length - 1)}
         />
+      ) : loadingDraft ? (
+        <div className="spinner" />
+      ) : loadError ? (
+        <div className="alert alert--error">{loadError}</div>
       ) : (
-        <form className="card wizard__card" onSubmit={handleSubmit} onInvalidCapture={openCollapsedSection}>
-          <div className="wizard__step-caption">
-            Шаг {current + 1} из {STEPS.length}
-          </div>
-          <h2>{step.title}</h2>
-          <p className="muted">{step.description}</p>
-          <p className="wizard__result">
-            <b>Результат:</b> {step.result}
-          </p>
+        <form
+          className="card wizard__card"
+          noValidate
+          onSubmit={handleSubmit}
+          onInvalidCapture={openCollapsedSection}
+        >
+          {current !== 0 && (
+            <p className="wizard__result">
+              <b>Результат:</b> {step.result}
+            </p>
+          )}
 
           <div className="wizard__fields">
-            <StepFields form={form} set={set} />
+            <StepFields form={form} set={set} notify={showNotice} rateDefaults={rateDefaults} />
           </div>
 
-          {notice && <div className="alert">{notice}</div>}
+          {offer && (
+            <div className="alert alert--warn draft-offer">
+              <span>
+                {offer.steps < 1
+                  ? 'Черновик уже в списке. Шаг 1 ещё нужно заполнить.'
+                  : `Черновик сохранён до шага ${offer.steps}. Шаг ${offer.blocked + 1} заполнен не полностью.`}
+              </span>
+              <div className="draft-offer__actions">
+                <button
+                  type="button"
+                  className="btn btn--small"
+                  onClick={() => {
+                    setOffer(null)
+                    goTo(offer.blocked)
+                  }}
+                >
+                  Заполнить шаг {offer.blocked + 1}
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="wizard__actions">
-            <button type="button" className="btn" onClick={() => goTo(current - 1)} disabled={current === 0}>
+            <button type="button" className="btn wizard__back" onClick={() => goTo(current - 1)} disabled={current === 0}>
+              <ArrowLeftIcon />
               Назад
             </button>
-            <button type="submit" className="btn btn--primary">
-              {isLast ? (
-                <>
-                  <SparkIcon />
-                  Сгенерировать через NC-AI
-                </>
-              ) : (
-                'Далее'
+            <div className="wizard__actions-main">
+              {!editing && (
+                <button type="button" className="btn" disabled={saving} onClick={() => saveDraft()}>
+                  {saving ? 'Сохраняем…' : 'Сохранить как черновик'}
+                </button>
               )}
-            </button>
+              <button type="submit" className="btn btn--primary">
+                {isLast ? (
+                  <>
+                    <SparkIcon />
+                    {editing || savedId ? 'Сохранить изменения' : 'Сгенерировать через NC-AI'}
+                  </>
+                ) : (
+                  <>
+                    Далее
+                    <ArrowRightIcon />
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </form>
       )}

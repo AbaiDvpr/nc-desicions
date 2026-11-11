@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     admin_email: str = ""
     admin_password: str = ""
     admin_cookie_name: str = "admin_token"
+    openai_api_key: str = ""
+    openai_api_url: str = "https://api.openai.com/v1/chat/completions"
+    llm_api_url: str = "https://api-sf1-cdn.deploy.com/api/v1/chat/completions"
+    llm_api_key: str = ""
+    fem_inflation: float = 9.2
+    # Год:сумма. Для года без записи берётся последняя известная сумма не позже этого года.
+    fem_mzp: str = "2022:60000,2023:70000,2024:85000"
 
 
 settings = Settings()

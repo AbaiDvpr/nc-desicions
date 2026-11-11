@@ -17,6 +17,19 @@ from app.schemas import (
 )
 
 Month = Field(pattern=r"^\d{4}-\d{2}$")
+
+
+def _month_or_blank(value: str, message: str) -> str:
+    value = (value or "").strip()
+    if not value:
+        return ""
+    value = value[:7]
+    if len(value) != 7 or value[4] != "-" or not (value[:4].isdigit() and value[5:].isdigit()):
+        raise ValueError(message)
+    month = int(value[5:])
+    if month < 1 or month > 12:
+        raise ValueError(message)
+    return value
 CAPEX_KEYS = ("smr", "overhaul", "ready_premises", "equipment")
 OPERATING_KEYS = ("raw", "advertising", "wages", "rental", "other")
 UNITS = {
@@ -42,6 +55,7 @@ FINANCING = {
     1: "долевое финансирование (инвестор)",
     2: "долговое (кредитное) финансирование",
     3: "грантовое финансирование",
+    4: "инвестор и кредит",
 }
 CAPEX_LABELS = {
     "smr": "Перечень видов работ СМР, капитального ремонта",
@@ -58,6 +72,9 @@ class VolumeSaleIn(BaseModel):
     seasonal: bool = False
     months: list[int] = Field(default_factory=list, max_length=12)
     price: Num
+    sales_start: str = ""
+    own_capacity: bool = False
+    planned_capacity: dict[str, Num] = Field(default_factory=dict)
 
     @field_validator("name")
     @classmethod
@@ -74,6 +91,11 @@ class VolumeSaleIn(BaseModel):
             raise ValueError("Месяц сезонности должен быть от 1 до 12")
         return value
 
+    @field_validator("sales_start")
+    @classmethod
+    def product_sales_start(cls, value: str) -> str:
+        return _month_or_blank(value, "Дата начала продаж продукта должна быть месяцем")
+
 
 class AssetRow(BaseModel):
     name: str = Field(default="", max_length=255)
@@ -82,6 +104,15 @@ class AssetRow(BaseModel):
     price: Num = 0
     year: Int = 0
     life_years: Int = 0
+    pay_month: str = ""
+    commission_month: str = ""
+    already_owned: bool = False
+    book_value: Num = 0
+
+    @field_validator("pay_month", "commission_month")
+    @classmethod
+    def asset_month(cls, value: str) -> str:
+        return _month_or_blank(value, "Дата оплаты или ввода актива должна быть месяцем")
 
 
 class VariableCostIn(BaseModel):
@@ -96,6 +127,19 @@ class ExpenseRow(BaseModel):
     invest: bool = False
     period: int = Field(default=1, ge=0, le=12)
     type_expense: int = Field(default=0, ge=0, le=2)
+    # Калькулятор земельного налога: площадь × ставка в выбранных единицах → value (плата за период).
+    land_tax: bool = False
+    land_unit: str = Field(default="m2", max_length=8)  # m2 | ha
+    land_area: Num = 0
+    land_rate: Num = 0
+
+    @field_validator("land_unit")
+    @classmethod
+    def land_unit_ok(cls, value: str) -> str:
+        text = str(value or "m2").strip().lower()
+        if text in ("ha", "га", "hectare", "hectares"):
+            return "ha"
+        return "m2"
 
 
 class SalaryRow(BaseModel):
@@ -105,6 +149,10 @@ class SalaryRow(BaseModel):
     salary: Num = 0
     percent: Num = 0
     industrial: int = Field(default=0, ge=0, le=1)
+    opv_exempt: bool = False
+    so_exempt: bool = False
+    opvr_exempt: bool = False
+    osms_exempt: bool = False
     services: list[Text] = Field(default_factory=list, max_length=30)
 
 
@@ -120,33 +168,69 @@ class Amounts(BaseModel):
     other: Num = 0
 
 
+class GovProgramIn(BaseModel):
+    slug: str = Field(default="", max_length=80)
+    title: str = Field(default="", max_length=240)
+    kind: str = Field(default="", max_length=20)
+    kind_label: str = Field(default="", max_length=40)
+    url: str = Field(default="", max_length=300)
+    rate: float | None = None
+    client_rate: float | None = None
+    amount: str = Field(default="", max_length=120)
+    detail: str = Field(default="", max_length=300)
+    purpose: str = Field(default="", max_length=240)
+    term_min_months: int | None = None
+    term_max_months: int | None = None
+    term_kind: str = Field(default="", max_length=20)
+    logic: str = Field(default="", max_length=800)
+    allows_investment: bool = True
+    allows_wc: bool = True
+    grace_max_months: int | None = None
+
+
 class ProjectFormIn(BaseModel):
     name: str = Field(min_length=1, max_length=500)
     legal_form: int = Field(ge=1, le=2)
     nds: int = Field(ge=0, le=1)
     tax_regime: int = Field(ge=1, le=4)
+    # Ставки в процентах (4 = 4%). Пустые → дефолты справочника / константы FEM.
+    tax_simplified_rate: Num = 0
+    tax_cit_rate: Num = 0
+    vat_rate: Num = 0
+    vosms_rate: Num = 0
+    social_tax_rate: Num = 0
     currency: str = Field(pattern=r"^(kzt|usd|eur)$")
     time_param: int = Field(ge=1, le=3)
     schedule: int = Field(ge=1, le=3)
     planning_from: str = Month
     planning_to: str = Month
 
-    financing: int = Field(ge=1, le=3)
+    financing: int = Field(ge=1, le=4)
     investor_term: Int = 0
     investor_dividend: Num = 0
+    risk_premium: Num = 0
     loan_term: Int = 0
     loan_grace: Int = 0
     loan_rate: Num = 0
+    loan_bank_rate: Num = 0
+    loan_subsidy_rate: Num = 0
+    loan_subsidy_term: Int = 0
+    loan_nbk_plus_4: bool = False
     loan_annuity: bool = False
+    gov_program: GovProgramIn | None = None
+    # Гарантия Damu как дополнение к субсидии/кредиту (не меняет ставку).
+    gov_guarantee: GovProgramIn | None = None
     wc_term: Int = 0
     wc_grace: Int = 0
     wc_rate: Num = 0
 
     sales_start: str = Month
     planned_volume: str = Month
-    volume_sales: list[VolumeSaleIn] = Field(min_length=1, max_length=30)
+    volume_sales: list[VolumeSaleIn] = Field(min_length=1, max_length=100)
     planned_capacity: dict[str, Num] = Field(default_factory=dict)
     other_income: Num = 0
+    other_income_start: str = ""
+    other_income_period: int = Field(default=1, ge=1, le=3)
     equipment: list[AssetRow] = Field(default_factory=list, max_length=30)
     premises: list[AssetRow] = Field(default_factory=list, max_length=30)
     smr: list[AssetRow] = Field(default_factory=list, max_length=30)
@@ -162,6 +246,7 @@ class ProjectFormIn(BaseModel):
     own_invest: int = Field(ge=0, le=1)
     own: Amounts = Field(default_factory=Amounts)
     attracted: Amounts = Field(default_factory=Amounts)
+    credit: Amounts = Field(default_factory=Amounts)
     months_raw: Int = 1
     months_wages: Int = 1
     months_advertising: Int = 1
@@ -190,6 +275,11 @@ class ProjectFormIn(BaseModel):
             raise ValueError("Выберите временные параметры расчёта")
         return value
 
+    @field_validator("other_income_start")
+    @classmethod
+    def other_income_month(cls, value: str) -> str:
+        return _month_or_blank(value, "Дата начала прочих доходов должна быть месяцем")
+
     @model_validator(mode="after")
     def check_form(self):
         if self.planning_to < self.planning_from:
@@ -197,15 +287,28 @@ class ProjectFormIn(BaseModel):
         if not (self.planning_from <= self.sales_start <= self.planning_to):
             raise ValueError("Дата начала продаж должна входить в период планирования")
         if not (self.planning_from <= self.planned_volume <= self.planning_to):
-            raise ValueError("Срок выхода на плановый объём должен входить в период планирования")
+            raise ValueError("Дата «Выход на 100%» должна входить в период планирования")
+        if self.planned_volume < self.sales_start:
+            raise ValueError("Дата «Выход на 100%» не может быть раньше начала продаж")
         if any(row.count <= 0 for row in self.volume_sales):
             raise ValueError("Укажите планируемое количество продаж")
-        if self.financing == 1:
+        for row in self.volume_sales:
+            if row.sales_start and not (self.planning_from <= row.sales_start <= self.planning_to):
+                raise ValueError("Дата начала продаж продукта должна входить в период планирования")
+            if any(value < 0 for value in row.planned_capacity.values()):
+                raise ValueError("Загрузка не может быть отрицательной")
+        if any(value < 0 for value in self.planned_capacity.values()):
+            raise ValueError("Загрузка не может быть отрицательной")
+        if self.other_income_start and not (self.planning_from <= self.other_income_start <= self.planning_to):
+            raise ValueError("Дата начала прочих доходов должна входить в период планирования")
+        if self.financing in (1, 4):
             if not 1 <= self.investor_term <= 100:
                 raise ValueError("Срок участия инвестора — от 1 до 100 лет")
             if self.investor_dividend > 100:
                 raise ValueError("Дивиденды инвестора не больше 100%")
-        if self.financing == 2:
+            if self.risk_premium > 100:
+                raise ValueError("Премия за риск проекта не больше 100%")
+        if self.financing in (2, 4):
             if not 1 <= self.loan_term <= 250:
                 raise ValueError("Срок займа на инвестиционные цели — от 1 до 250 месяцев")
             if self.loan_grace > 36:
@@ -216,6 +319,60 @@ class ProjectFormIn(BaseModel):
                 raise ValueError("Льготный период по оборотным средствам не больше 36 месяцев")
             if self.wc_rate > 100 or self.loan_rate > 100:
                 raise ValueError("Ставка по кредиту не больше 100%")
+            if self.loan_bank_rate > 100 or self.loan_subsidy_rate > 100:
+                raise ValueError("Банковская и субсидируемая ставки не больше 100%")
+            if self.loan_subsidy_term and self.loan_subsidy_term > self.loan_term:
+                raise ValueError("Срок субсидии не больше срока кредита")
+            if self.loan_bank_rate and self.loan_rate and self.loan_bank_rate + 0.001 < self.loan_rate:
+                raise ValueError("Ставка для клиента не больше банковской")
+            if self.loan_bank_rate and self.loan_rate:
+                # Как в Радуге: субсидия Damu = банк − ставка клиента.
+                self.loan_subsidy_rate = round(float(self.loan_bank_rate) - float(self.loan_rate), 3)
+            if self.loan_bank_rate and self.loan_subsidy_rate and self.loan_bank_rate + 0.001 < self.loan_subsidy_rate:
+                raise ValueError("Субсидируемая ставка не больше банковской")
+            program = self.gov_program
+            if program is not None and program.slug:
+                raw_title = (program.title or "госпрограмме").strip()
+                title = raw_title if raw_title.startswith("«") else f"«{raw_title}»"
+                if not program.allows_investment:
+                    raise ValueError(f"{title} не покрывает кредит на помещение и оборудование. Работайте без госпрограммы.")
+                if not program.allows_wc and (self.wc_term or self.wc_grace or self.wc_rate):
+                    raise ValueError(f"{title} не даёт заём на оборотные средства. Работайте без госпрограммы.")
+                if not self.loan_bank_rate and not self.loan_nbk_plus_4:
+                    raise ValueError(f"Для {title} укажите ставку банка или включите «НБ РК + 4%».")
+                if program.grace_max_months and self.loan_grace > program.grace_max_months:
+                    raise ValueError(f"Каникулы больше {program.grace_max_months} мес. — это предел программы {title}.")
+                if program.allows_investment and program.rate is not None and abs(float(self.loan_rate) - float(program.rate)) > 0.001:
+                    raise ValueError(f"Ставка для клиента должна быть {program.rate:g}% — так в программе {title}")
+                # Срок субсидии по умолчанию = срок кредита, не больше максимума программы.
+                if not self.loan_subsidy_term and self.loan_term:
+                    cap = int(program.term_max_months or 0)
+                    self.loan_subsidy_term = min(int(self.loan_term), cap) if cap else int(self.loan_term)
+                if program.term_kind == "subsidy":
+                    if not self.loan_subsidy_term:
+                        raise ValueError(f"Укажите срок субсидии по программе {title}")
+                    if program.term_max_months and self.loan_subsidy_term > program.term_max_months:
+                        raise ValueError(
+                            f"Срок субсидии {self.loan_subsidy_term} мес. больше максимума {title}: {program.term_max_months} мес."
+                        )
+                if self.loan_subsidy_term and self.loan_term and self.loan_subsidy_term > self.loan_term:
+                    self.loan_subsidy_term = int(self.loan_term)
+                if program.term_kind == "loan":
+                    low = program.term_min_months or 0
+                    high = program.term_max_months or 0
+                    if low and self.loan_term < low:
+                        raise ValueError(f"Срок {self.loan_term} мес. меньше минимума программы {title}: {low} мес.")
+                    if high and self.loan_term > high:
+                        raise ValueError(f"Срок {self.loan_term} мес. больше максимума программы {title}: {high} мес.")
+                if program.term_kind == "subsidy" and program.rate is not None and self.wc_term:
+                    if abs(float(self.wc_rate) - float(program.rate)) > 0.001:
+                        raise ValueError(f"Ставка по оборотным средствам должна быть {program.rate:g}% — так в программе {title}")
+        if self.financing == 4:
+            for key in (*CAPEX_KEYS, *OPERATING_KEYS):
+                external = getattr(self.attracted, key)
+                loan = getattr(self.credit, key)
+                if round(loan) > round(external):
+                    raise ValueError("Кредит больше привлекаемой суммы по одной из статей")
         for label, rows in (
             ("оборудования", self.equipment),
             ("недвижимости", self.premises),
@@ -225,8 +382,16 @@ class ProjectFormIn(BaseModel):
             for row in rows:
                 if not row.name.strip():
                     continue
-                if row.count <= 0 or row.year < 1900 or row.life_years <= 0:
-                    raise ValueError(f"Для {label} укажите количество, год приобретения и срок службы")
+                title = row.name.strip()
+                missing = []
+                if row.count <= 0:
+                    missing.append("количество")
+                if row.year < 1900:
+                    missing.append("год приобретения")
+                if row.life_years <= 0:
+                    missing.append("срок службы")
+                if missing:
+                    raise ValueError(f"Для «{title}» ({label}) укажите: {', '.join(missing)}")
         targets = {
             "smr": sum(row.price for row in self.smr if row.name.strip()),
             "overhaul": sum(row.price for row in self.overhaul if row.name.strip()),
@@ -253,13 +418,67 @@ def months_between(start: str, end: str) -> int:
 
 
 def present(data: dict) -> tuple[str, int]:
+    facts = card_facts(data)
+    return facts["industry"], facts["horizon_months"]
+
+
+def _shift_month(start: str, offset: int) -> str:
+    if not start or len(start) < 7:
+        return ""
+    year, month = int(start[:4]), int(start[5:7])
+    index = year * 12 + (month - 1) + offset
+    return f"{index // 12:04d}-{index % 12 + 1:02d}"
+
+
+def card_facts(data: dict) -> dict:
+    forms = {1: "ИП", 2: "ТОО", "1": "ИП", "2": "ТОО"}
+    financing_names = {1: "Инвестор", 2: "Кредит", 3: "Грант", 4: "Инвестор и кредит"}
     company = data.get("company")
     if isinstance(company, dict) and "horizon_months" in company:
-        return company.get("industry") or "", int(company.get("horizon_months") or 36)
-    forms = {1: "ИП", 2: "ТОО"}
-    return forms.get(data.get("legal_form"), ""), months_between(
-        data.get("planning_from") or "", data.get("planning_to") or ""
-    )
+        start = str(company.get("start_date") or "")[:7]
+        horizon = int(company.get("horizon_months") or 36)
+        goal = str((data.get("market") or {}).get("funding_goal") or "")
+        short = {
+            "долевое финансирование (инвестор)": "Инвестор",
+            "долговое (кредитное) финансирование": "Кредит",
+            "грантовое финансирование": "Грант",
+            "инвестор и кредит": "Инвестор и кредит",
+        }
+        legal = str(company.get("legal_form") or "")
+        return {
+            "industry": company.get("industry") or legal,
+            "horizon_months": horizon,
+            "legal_form": legal,
+            "planning_from": start,
+            "planning_to": _shift_month(start, horizon - 1) if start else "",
+            "financing": short.get(goal, goal),
+            "gov_program": "",
+        }
+    legal_raw = data.get("legal_form")
+    try:
+        financing_key = int(data.get("financing"))
+    except (TypeError, ValueError):
+        financing_key = None
+    start = str(data.get("planning_from") or "")[:7]
+    end = str(data.get("planning_to") or "")[:7]
+    legal = forms.get(legal_raw, forms.get(str(legal_raw), ""))
+    titles = []
+    if financing_key in (2, 4):
+        for key in ("gov_program", "gov_guarantee"):
+            item = data.get(key) or {}
+            if isinstance(item, dict):
+                title = str(item.get("title") or "").strip()
+                if title:
+                    titles.append(title)
+    return {
+        "industry": legal,
+        "horizon_months": months_between(start, end) if start and end else 0,
+        "legal_form": legal,
+        "planning_from": start,
+        "planning_to": end,
+        "financing": financing_names.get(financing_key, ""),
+        "gov_program": " + ".join(titles),
+    }
 
 
 def _period(value: int) -> str:
@@ -294,6 +513,67 @@ def _costs(rows: list[ExpenseRow], category: str) -> list[CostIn]:
         for row in rows
         if row.name.strip() and row.value
     ]
+
+
+def _loans(form: ProjectFormIn, capex_amount: float, operating_amount: float) -> list[LoanIn]:
+    loans: list[LoanIn] = []
+    if capex_amount <= 0 and operating_amount <= 0:
+        return loans
+    program = form.gov_program
+    allow_wc = not (program is not None and program.slug and program.allows_wc is False)
+    rate = float(form.loan_rate)
+    term = int(form.loan_term or 36)
+    grace = int(form.loan_grace or 0)
+    if program is not None and program.slug:
+        if program.rate is not None:
+            rate = float(program.rate)
+        if program.term_kind == "loan":
+            low = int(program.term_min_months or 0)
+            high = int(program.term_max_months or 0)
+            if high and term > high:
+                term = high
+            if low and term < low:
+                term = low
+        if program.grace_max_months:
+            grace = min(grace, int(program.grace_max_months))
+    wc_amount = operating_amount if allow_wc and form.wc_term and operating_amount else 0.0
+    if wc_amount:
+        wc_rate = float(form.wc_rate)
+        if program is not None and program.slug and program.term_kind == "subsidy" and program.rate is not None:
+            wc_rate = float(program.rate)
+        loans.append(
+            LoanIn(
+                name="Займ на пополнение оборотных средств",
+                amount=wc_amount,
+                issue_date=form.planning_from,
+                rate=wc_rate,
+                term_months=form.wc_term,
+                grace_months=form.wc_grace,
+                method="differentiated",
+            )
+        )
+        main_amount = capex_amount
+    elif allow_wc:
+        main_amount = capex_amount + operating_amount
+    else:
+        # Без оборотки по программе в кредит идёт только CAPEX.
+        main_amount = capex_amount
+    if main_amount:
+        title = "Займ на инвестиционные цели"
+        if program is not None and program.slug and program.title:
+            title = f"Займ на инвестиционные цели ({program.title})"
+        loans.append(
+            LoanIn(
+                name=title,
+                amount=main_amount,
+                issue_date=form.planning_from,
+                rate=rate,
+                term_months=term,
+                grace_months=grace,
+                method="annuity" if form.loan_annuity else "differentiated",
+            )
+        )
+    return loans
 
 
 def to_fin_model(form: ProjectFormIn) -> FinModelData:
@@ -350,37 +630,18 @@ def to_fin_model(form: ProjectFormIn) -> FinModelData:
         description += f" Проектная мощность: {capacity}."
     attracted = sum(getattr(form.attracted, key) for key in (*CAPEX_KEYS, *OPERATING_KEYS))
     own = sum(getattr(form.own, key) for key in (*CAPEX_KEYS, *OPERATING_KEYS)) if form.own_invest else 0
-    loans: list[LoanIn] = []
+    credit = sum(getattr(form.credit, key) for key in (*CAPEX_KEYS, *OPERATING_KEYS)) if form.financing == 4 else 0
+    investor_amount = attracted if form.financing == 1 else max(0, attracted - credit) if form.financing == 4 else 0
     if form.financing == 2:
-        capex_amount = sum(getattr(form.attracted, key) for key in CAPEX_KEYS)
-        operating_amount = sum(getattr(form.attracted, key) for key in OPERATING_KEYS)
-        if form.wc_term and operating_amount:
-            main_amount = capex_amount
-            loans.append(
-                LoanIn(
-                    name="Займ на пополнение оборотных средств",
-                    amount=operating_amount,
-                    issue_date=form.planning_from,
-                    rate=form.wc_rate,
-                    term_months=form.wc_term,
-                    grace_months=form.wc_grace,
-                    method="differentiated",
-                )
-            )
-        else:
-            main_amount = capex_amount + operating_amount
-        if main_amount:
-            loans.append(
-                LoanIn(
-                    name="Займ на инвестиционные цели",
-                    amount=main_amount,
-                    issue_date=form.planning_from,
-                    rate=form.loan_rate,
-                    term_months=form.loan_term or 36,
-                    grace_months=form.loan_grace,
-                    method="annuity" if form.loan_annuity else "differentiated",
-                )
-            )
+        loan_capex = sum(getattr(form.attracted, key) for key in CAPEX_KEYS)
+        loan_operating = sum(getattr(form.attracted, key) for key in OPERATING_KEYS)
+    elif form.financing == 4:
+        loan_capex = sum(getattr(form.credit, key) for key in CAPEX_KEYS)
+        loan_operating = sum(getattr(form.credit, key) for key in OPERATING_KEYS)
+    else:
+        loan_capex = 0
+        loan_operating = 0
+    loans = _loans(form, loan_capex, loan_operating)
     return FinModelData(
         company=CompanyIn(
             name=form.name,
@@ -397,9 +658,9 @@ def to_fin_model(form: ProjectFormIn) -> FinModelData:
         expenses={"staff": staff, "costs": costs, "assets": assets},
         investment=InvestmentIn(
             equity=own,
-            investor_amount=attracted if form.financing == 1 else 0,
-            investor_date=form.planning_from if form.financing == 1 else "",
-            investor_share=form.investor_dividend if form.financing == 1 else 0,
+            investor_amount=investor_amount,
+            investor_date=form.planning_from if form.financing in (1, 4) else "",
+            investor_share=form.investor_dividend if form.financing in (1, 4) else 0,
             grant_amount=attracted if form.financing == 3 else 0,
             loans=loans,
         ),

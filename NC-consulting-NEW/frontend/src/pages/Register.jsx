@@ -72,7 +72,7 @@ export default function Register() {
           </label>
           <label className="field">
             <span>Телефон</span>
-            <input name="phone" type="tel" autoComplete="tel" value={form.phone} onChange={onChange} />
+            <input name="phone" type="tel" autoComplete="tel" inputMode="tel" placeholder="+7" value={form.phone} onChange={onChange} />
           </label>
         </div>
 

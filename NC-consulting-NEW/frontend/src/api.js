@@ -64,16 +64,47 @@ export const api = {
   deleteRequisite: (id, requisiteId) =>
     request(`/companies/${id}/requisites/${requisiteId}`, { method: 'DELETE' }),
   listBanks: () => request('/banks'),
+  govPrograms: () => request('/gov-programs'),
+  nbkBaseRate: () => request('/gov-programs/base-rate'),
+  femRates: () => request('/fem-rates'),
   listCounterparties: () => request('/counterparties'),
   getCounterparty: (id) => request(`/counterparties/${id}`),
   createCounterparty: (payload) => request('/counterparties', { method: 'POST', body: payload }),
   updateCounterparty: (id, payload) => request(`/counterparties/${id}`, { method: 'PUT', body: payload }),
   deleteCounterparty: (id) => request(`/counterparties/${id}`, { method: 'DELETE' }),
-  listFinModels: () => request('/fin-models'),
-  createFinModel: (payload) => request('/fin-models', { method: 'POST', body: payload }),
+  listFinModels: ({ archived = false, page = 1, q = '' } = {}) => {
+    const params = new URLSearchParams()
+    if (archived) params.set('archived', 'true')
+    if (page > 1) params.set('page', String(page))
+    if (q) params.set('q', q)
+    const query = params.toString()
+    return request(`/fin-models${query ? `?${query}` : ''}`)
+  },
+  archiveFinModel: (id) => request(`/fin-models/${id}/archive`, { method: 'POST' }),
+  restoreFinModel: (id) => request(`/fin-models/${id}/restore`, { method: 'POST' }),
+  getFinModel: (id) => request(`/fin-models/${id}`),
+  updateFinModel: (id, payload) => request(`/fin-models/${id}`, { method: 'PUT', body: payload }),
+  createFinModel: (payload, draftId) =>
+    request(`/fin-models${draftId ? `?draft_id=${draftId}` : ''}`, { method: 'POST', body: payload }),
+  saveDraft: (payload) => request('/fin-models/drafts', { method: 'POST', body: payload }),
+  updateDraft: (id, payload) => request(`/fin-models/drafts/${id}`, { method: 'PUT', body: payload }),
+  getDraft: (id) => request(`/fin-models/drafts/${id}`),
+  bpCatalog: () => request('/bp'),
+  bpJob: (id) => request(`/fin-models/${id}/business-plan`),
+  startBpJob: (id, { templateId, force = false } = {}) => {
+    const params = new URLSearchParams()
+    if (templateId) params.set('template_id', String(templateId))
+    if (force) params.set('force', 'true')
+    const query = params.toString()
+    return request(`/fin-models/${id}/business-plan${query ? `?${query}` : ''}`, { method: 'POST' })
+  },
+  retryBpJob: (id, jobId) => request(`/fin-models/${id}/business-plan/${jobId}/retry`, { method: 'POST' }),
+  reviewBpTask: (id, jobId, taskId, answer) =>
+    request(`/fin-models/${id}/business-plan/${jobId}/tasks/${taskId}/review`, { method: 'POST', body: { answer } }),
 }
 
 export const finModelFiles = (id) => ({
   word: `/api/fin-models/${id}/report.docx`,
-  excel: `/api/fin-models/${id}/model.xlsx`,
+  pdf: `/api/fin-models/${id}/report.pdf`,
+  excel: `/api/fin-models/${id}/fem-v5.xlsx`,
 })

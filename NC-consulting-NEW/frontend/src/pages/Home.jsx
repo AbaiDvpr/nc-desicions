@@ -11,7 +11,7 @@ export default function Home() {
   useEffect(() => {
     api
       .listFinModels()
-      .then((models) => setModelCount(models.length))
+      .then((page) => setModelCount(page.total))
       .catch(() => setModelCount(null))
   }, [])
 

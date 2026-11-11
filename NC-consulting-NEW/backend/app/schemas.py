@@ -114,6 +114,9 @@ class TariffCurrentOut(BaseModel):
     balance: int
     models_used: int
     models_left: int
+    models_extra: int = 0
+    models_allowance: int = 0
+    period_label: str = ""
     expired: bool
     days_left: int | None
     expire_progress: int
@@ -329,6 +332,45 @@ class FinModelOut(BaseModel):
     industry: str
     horizon_months: int
     created_at: datetime
+    status: str = "ready"
+    completed_steps: int = 0
+    legal_form: str = ""
+    planning_from: str = ""
+    planning_to: str = ""
+    financing: str = ""
+    gov_program: str = ""
+    bp_status: str = ""
+    bp_count: int = 0
+    bp_complete: int = 0
+    bp_started_at: datetime | None = None
+    bp_finished_at: datetime | None = None
+
+
+class FinModelPage(BaseModel):
+    items: list[FinModelOut]
+    total: int
+    page: int
+    pages: int
+    limit: int
+
+
+class FinModelDetail(BaseModel):
+    id: int
+    name: str
+    form: dict
+
+
+class DraftIn(BaseModel):
+    form: dict
+    completed_steps: int = Field(ge=0, le=4)
+    reached_step: int = Field(ge=1, le=4)
+
+
+class DraftOut(BaseModel):
+    id: int
+    form: dict
+    completed_steps: int
+    reached_step: int
 
 
 class CabinetCompanyIn(BaseModel):
