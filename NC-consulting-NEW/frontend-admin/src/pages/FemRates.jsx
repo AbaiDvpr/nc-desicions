@@ -14,11 +14,28 @@ const TOO_FIELDS = [
 
 const SHARED_FIELDS = [
   { key: 'vat_rate', label: 'НДС', unit: '%', hint: 'В ДДС при плательщике НДС' },
-  { key: 'vosms_rate', label: 'ВОСМС работника', unit: '%', hint: 'Удержание из зарплаты к выплате' },
   { key: 'nbk_bank_spread', label: 'НБ РК + N%', unit: 'п.п.', hint: 'Надбавка к базовой ставке НБРК для кредита' },
 ]
 
-const ALL_RATE_KEYS = [...IP_FIELDS, ...TOO_FIELDS, ...SHARED_FIELDS].map((field) => field.key)
+const PAYROLL_FIELDS = [
+  { key: 'opv_rate', label: 'ОПВ', unit: '%', hint: 'Пенсионные взносы · работник' },
+  { key: 'vosms_rate', label: 'ВОСМС', unit: '%', hint: 'Медстрахование · работник' },
+  { key: 'ipn_rate', label: 'ИПН базовая', unit: '%', hint: 'Подоходный налог · работник (10%)' },
+  { key: 'ipn_rate_high', label: 'ИПН повышенная', unit: '%', hint: 'Подоходный налог · работник (15%)' },
+  { key: 'so_rate', label: 'СО', unit: '%', hint: 'Социальные отчисления · работодатель' },
+  { key: 'opvr_rate', label: 'ОПВР 2026', unit: '%', hint: 'Пенсионные взносы работодателя · дефолт анкеты' },
+  { key: 'opvr_rate_2027', label: 'ОПВР 2027', unit: '%', hint: 'Применяется к месяцам 2027 года' },
+  { key: 'opvr_rate_2028', label: 'ОПВР с 2028', unit: '%', hint: 'Применяется с 2028 года и дальше' },
+  { key: 'osms_rate', label: 'ООСМС', unit: '%', hint: 'Медстрахование работодателя' },
+]
+
+const LIMIT_FIELDS = [
+  { key: 'mrp', label: 'МРП', unit: '₸', hint: 'Месячный расчётный показатель', max: 1000000, step: 1 },
+  { key: 'vat_threshold_mrp', label: 'Порог НДС', unit: 'МРП', hint: 'Годовой оборот для обязательной постановки на НДС', max: 100000000, step: 1 },
+  { key: 'simplified_limit_mrp', label: 'Лимит упрощёнки', unit: 'МРП', hint: 'Годовой доход, выше — общий режим', max: 100000000, step: 1 },
+]
+
+const ALL_RATE_KEYS = [...IP_FIELDS, ...TOO_FIELDS, ...SHARED_FIELDS, ...PAYROLL_FIELDS, ...LIMIT_FIELDS].map((field) => field.key)
 
 function money(value) {
   const amount = Number(value)
@@ -36,8 +53,8 @@ function RateGrid({ fields, form, onChange }) {
             <input
               type="number"
               min="0"
-              max={field.key === 'nbk_bank_spread' ? 50 : 100}
-              step="0.01"
+              max={field.max ?? (field.key === 'nbk_bank_spread' ? 50 : 100)}
+              step={field.step ?? '0.01'}
               value={form[field.key] ?? ''}
               onChange={(event) => onChange(field.key, event.target.value)}
             />
@@ -159,6 +176,32 @@ export default function FemRates() {
               </div>
             </header>
             <RateGrid fields={SHARED_FIELDS} form={form} onChange={set} />
+          </section>
+
+          <section className="card rates-card">
+            <header className="rates-card__head">
+              <div>
+                <h2>ФОТ: взносы и удержания</h2>
+                <p className="muted">
+                  ОПВ, ВОСМС, ИПН — с работника; СО, ОПВР, ООСМС — с работодателя. Дефолты для новых анкет; в карточке
+                  сотрудника процент рядом с тумблером можно поменять для проекта.
+                </p>
+              </div>
+            </header>
+            <RateGrid fields={PAYROLL_FIELDS} form={form} onChange={set} />
+          </section>
+
+          <section className="card rates-card">
+            <header className="rates-card__head">
+              <div>
+                <h2>Пороги и МРП</h2>
+                <p className="muted">
+                  Excel сравнивает годовую выручку с порогом НДС и лимитом упрощёнки (порог × МРП) и показывает
+                  предупреждение в проверках.
+                </p>
+              </div>
+            </header>
+            <RateGrid fields={LIMIT_FIELDS} form={form} onChange={set} />
           </section>
 
           <section className="card rates-card">

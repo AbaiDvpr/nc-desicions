@@ -7,19 +7,16 @@ from __future__ import annotations
 
 import hashlib
 import json
-import subprocess
-import tempfile
-import threading
-from pathlib import Path
+from io import BytesIO
 
 from openpyxl import load_workbook
 
 from app.fem_v5_book import build_fem_v5_excel
+from app.xlsx_calc import XlsxCalcError, recalculate_xlsx
 
 PNL = "ОПиУ"
 CASH = "ДДС"
 EFFECT = "Анализ эффект."
-_LOCK = threading.Lock()
 _CACHE: dict[str, dict] = {}
 
 PNL_LINES = (
@@ -57,38 +54,11 @@ def read_statements(form: dict) -> dict | None:
 
 def _calculate(form: dict) -> dict | None:
     payload = build_fem_v5_excel(None, form)
-    with _LOCK:
-        with tempfile.TemporaryDirectory(prefix="nc-fem-") as folder:
-            source_dir = Path(folder) / "in"
-            out_dir = Path(folder) / "out"
-            source_dir.mkdir()
-            out_dir.mkdir()
-            source = source_dir / "model.xlsx"
-            source.write_bytes(payload)
-            profile = Path(folder) / "profile"
-            completed = subprocess.run(
-                [
-                    "soffice",
-                    "--headless",
-                    "--norestore",
-                    "--nolockcheck",
-                    "--nologo",
-                    f"-env:UserInstallation=file://{profile}",
-                    "--convert-to",
-                    "xlsx",
-                    "--outdir",
-                    str(out_dir),
-                    str(source),
-                ],
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=180,
-            )
-            calculated = out_dir / "model.xlsx"
-            if completed.returncode != 0 or not calculated.exists():
-                return None
-            workbook = load_workbook(calculated, data_only=True)
+    try:
+        calculated = recalculate_xlsx(payload)
+    except (XlsxCalcError, OSError):
+        return None
+    workbook = load_workbook(BytesIO(calculated), data_only=True)
     if PNL not in workbook.sheetnames or CASH not in workbook.sheetnames or EFFECT not in workbook.sheetnames:
         return None
     pnl = workbook[PNL]

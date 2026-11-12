@@ -4,7 +4,7 @@ import { api } from '../api.js'
 import ExcelDownloads from '../components/ExcelDownloads.jsx'
 import Toast from '../components/Toast.jsx'
 import { draftProgress, stepAnchor, stepAssetTab, stepField, stepProblem, toPayload } from './finmodel/helpers.js'
-import { STEPS, initialForm, newVolume } from './finmodel/options.js'
+import { DEFAULT_LIFE_YEARS, STEPS, initialForm, newVolume } from './finmodel/options.js'
 import { CompanyStep, ExpensesStep, InvestmentStep, SalesStep } from './finmodel/steps.jsx'
 
 const STEP_COMPONENTS = [CompanyStep, SalesStep, ExpensesStep, InvestmentStep]
@@ -106,10 +106,25 @@ export function withRateDefaults(form, rates) {
       : (rates.simplified_ip_rate ?? rates.simplified_rate)
   }
   if (emptyRate(next.vat_rate)) next.vat_rate = rates.vat_rate
+  if (emptyRate(next.opv_rate)) next.opv_rate = rates.opv_rate ?? 10
+  if (emptyRate(next.so_rate)) next.so_rate = rates.so_rate ?? 5
+  if (emptyRate(next.opvr_rate)) next.opvr_rate = rates.opvr_rate ?? 3.5
+  if (emptyRate(next.osms_rate)) next.osms_rate = rates.osms_rate ?? 3
   if (emptyRate(next.vosms_rate)) next.vosms_rate = rates.vosms_rate
   if (emptyRate(next.social_tax_rate)) next.social_tax_rate = rates.social_tax_rate
   if (emptyRate(next.tax_cit_rate)) {
     next.tax_cit_rate = too ? rates.cit_too_rate : rates.cit_ip_rate
+  }
+  return next
+}
+
+function withAssetLifeDefaults(form) {
+  const next = { ...form }
+  for (const [key, years] of Object.entries(DEFAULT_LIFE_YEARS)) {
+    next[key] = (form[key] || []).map((row) => {
+      if (row.life_years !== '' && row.life_years != null) return row
+      return { ...row, life_years: String(years) }
+    })
   }
   return next
 }
@@ -123,17 +138,20 @@ function restoreForm(saved, rates) {
     planning_to: asDate(saved.planning_to),
     sales_start: asDate(saved.sales_start),
     planned_volume: asDate(saved.planned_volume),
+    sales_start_load:
+      saved.sales_start_load === '' || saved.sales_start_load == null ? 50 : saved.sales_start_load,
     other_income_start: asDate(saved.other_income_start),
     other_income_period: saved.other_income_period || 1,
     own: { ...base.own, ...(saved.own || {}) },
     attracted: { ...base.attracted, ...(saved.attracted || {}) },
     credit: { ...base.credit, ...(saved.credit || {}) },
     planned_capacity: blankCapacity(saved.planned_capacity),
+    inventory: saved.inventory || [],
     volume_sales: saved.volume_sales?.length
       ? saved.volume_sales.map((row) => ({ ...newVolume(), ...row, sales_start: asDate(row.sales_start) }))
       : base.volume_sales,
   }
-  return withRateDefaults(merged, rates)
+  return withRateDefaults(withAssetLifeDefaults(merged), rates)
 }
 
 function Generation({ model, error, onRetry, onEdit, editing }) {
@@ -250,6 +268,10 @@ export default function FinModelCreate() {
       cit_ip_rate: 10,
       cit_too_rate: 20,
       vat_rate: 16,
+      opv_rate: 10,
+      so_rate: 5,
+      opvr_rate: 3.5,
+      osms_rate: 3,
       vosms_rate: 2,
       social_tax_rate: 6,
       nbk_bank_spread: 4,

@@ -59,6 +59,8 @@ TAX_RATES = {
     2: {1: 0.20, 2: 0.01, 3: 0.01, 4: 0.04},
 }
 VAT_RATE_2026 = 0.16
+NO_OUTFLOW = "Не определяется — нет инвестиционных оттоков"
+NO_INFLOW = "Не определяется — нет положительного потока"
 VOSMS_RATE = 0.02
 SOCIAL_TAX_2026 = 0.06
 
@@ -169,7 +171,7 @@ def _selling_months(form: dict, year: int, season: set[int] | None = None) -> in
 
 
 def _capacity(form: dict, years: list[int]) -> list[float]:
-    """Доля загрузки. Пустые годы доводятся до 100%. Если не заполнено ничего, рост от старта продаж до года полного объёма."""
+    """Доля загрузки. Пустые годы доводятся до 100%. Если не заполнено ничего, рост от загрузки первого месяца до 100%."""
     raw = form.get("planned_capacity") or {}
     known: dict[int, float] = {}
     for year in years:
@@ -180,7 +182,8 @@ def _capacity(form: dict, years: list[int]) -> list[float]:
     if not any(value > 0 for value in known.values()):
         sales_year = _year_month(form.get("sales_start") or form.get("planning_from"))[0]
         full_year = _year_month(form.get("planned_volume") or form.get("planning_to"))[0]
-        span = max(1, full_year - sales_year + 1)
+        opening = _sales_start_load(form)
+        span = max(1, full_year - sales_year)
         loads = []
         for year in years:
             if year < sales_year:
@@ -188,7 +191,7 @@ def _capacity(form: dict, years: list[int]) -> list[float]:
             elif year >= full_year:
                 loads.append(1.0)
             else:
-                loads.append((year - sales_year + 1) / span)
+                loads.append(opening + (1.0 - opening) * (year - sales_year) / span)
         return loads
     loads = []
     for index, year in enumerate(years):
@@ -319,6 +322,16 @@ def _price_index(offset: int) -> str:
     """Накопленный индекс цен этого года / база C47. Столбец D строки 47 — первый год."""
     column = get_column_letter(4 + offset)
     return f"'{SHEET}'!{column}47/'{SHEET}'!$C$47"
+
+
+def _ops_inflation_start_offset(form: dict) -> int:
+    """С какого года плана (0-based) растут цены, переменные и постоянные затраты и зарплаты.
+
+    Январский старт — со второго календарного года. Иначе первый год неполный:
+    рост с третьего, чтобы при старте в декабре январь ещё не поднимал цены на 9%.
+    """
+    _year, month = _year_month(form.get("planning_from"))
+    return 1 if month <= 1 else 2
 
 
 def _cost_index(offset: int) -> str:
@@ -662,7 +675,7 @@ _FIN_LINES = (
     ("overhaul", "Перечень материалов при СМР, капитальном ремонте"),
     ("ready_premises", "Помещения, здания, сооружения"),
     ("equipment", "Приобретение оборудования, техники, мебели"),
-    ("raw", "Закуп сырья, товаров, расходных материалов"),
+    ("raw", "Первоначальный запас сырья и товаров (закупка, не денежный резерв)"),
     ("advertising", "Расходы на рекламу"),
     ("wages", "Расходы по выплате заработной платы"),
     ("rental", "Расходы по аренде"),
@@ -753,6 +766,21 @@ def _column_span(first: int, count: int) -> tuple[str, str]:
     return get_column_letter(first), get_column_letter(first + count - 1)
 
 
+def _full_load_at_start(form: dict) -> bool:
+    start = str(form.get("sales_start") or "")[:7]
+    return len(start) == 7 and start == str(form.get("planned_volume") or "")[:7]
+
+
+def _sales_start_load(form: dict) -> float:
+    """Доля загрузки в первый месяц продаж. Пусто в анкете → 50%. Выход на 100% в месяц старта → 100%."""
+    if _full_load_at_start(form):
+        return 1.0
+    raw = form.get("sales_start_load")
+    if raw in (None, ""):
+        return 0.5
+    return min(1.0, max(0.0, _rate(raw)))
+
+
 def _month_load_formula(
     date_cell: str,
     period_cell: str,
@@ -762,8 +790,9 @@ def _month_load_formula(
     entered_row: int,
     flag_row: int,
     years: int,
+    opening_cell: str,
 ) -> str:
-    """Ручной процент года закрывает все его месяцы. Пустой год растёт линейно, без деления на ноль."""
+    """Ручной процент года закрывает все его месяцы. Пустой год: от загрузки первого месяца до 100%."""
     year_from, year_to = _column_span(YEAR_COLUMN, years)
     value_to = get_column_letter(2 + years)
     year_range = f"'{SHEET}'!${year_from}$6:${year_to}$6"
@@ -771,7 +800,13 @@ def _month_load_formula(
     value = f"SUMPRODUCT(({year_range}={year_cell})*('{REV}'!$C${entered_row}:${value_to}${entered_row}))"
     span = f"((YEAR({full_cell})-YEAR({sales_cell}))*12+MONTH({full_cell})-MONTH({sales_cell}))"
     elapsed = f"((YEAR({date_cell})-YEAR({sales_cell}))*12+MONTH({date_cell})-MONTH({sales_cell}))"
-    linear = f"IF({span}<=0,1,IF({elapsed}<=0,0,IF({elapsed}>={span},1,{elapsed}/{span})))"
+    # elapsed=0 → opening; elapsed=span → 100%; одинаковые даты → 100%.
+    linear = (
+        f"IF({span}<=0,1,"
+        f"IF({elapsed}<0,0,"
+        f"IF({elapsed}>={span},1,"
+        f"MIN(1,MAX(0,{opening_cell}+(1-{opening_cell})*{elapsed}/{span})))))"
+    )
     return (
         f'=IF(OR({period_cell}=0,{date_cell}<DATE(YEAR({sales_cell}),MONTH({sales_cell}),1)),0,'
         f"IF({flag}>0,MAX(0,{value}),{linear}))"
@@ -835,9 +870,12 @@ def _capacity_warning(ranges: list[str]) -> str:
 
 class PremisesBook:
     def __init__(self, user: User, form: dict):
+        from app.project_form import normalize_capex_financing
+
         self.user = user
-        self.form = form
-        self.years = _planning_years(form)
+        # already_owned не должен попадать в структуру финансирования как новая покупка.
+        self.form = normalize_capex_financing(form or {})
+        self.years = _planning_years(self.form)
         self.book = Workbook()
         self.book.calculation.calcMode = "auto"
         self.book.calculation.fullCalcOnLoad = True
@@ -1083,24 +1121,31 @@ class PremisesBook:
             previous = get_column_letter(column - 1)
             self._put(30, column, f"={previous}30", border=GREY_BOX, fmt=PCT, align="center")
 
-        for row, source in ((31, "$C$10"), (32, "$C$9"), (33, "$C$9")):
-            if self.years >= 2:
-                self._put(row, 4, f"={source}", border=GREY_BOX, fmt=PCT, align="center", fill=BLUE)
-            for column in range(5, 3 + self.years):
-                previous = get_column_letter(column - 1)
-                self._put(row, column, f"={previous}{row}", border=GREY_BOX, fmt=PCT, align="center")
-
-        if self.years >= 2:
-            self._put(34, 4, 0.05, border=GREY_BOX, fmt=PCT, align="center", fill=BLUE)
-        for column in range(5, 3 + self.years):
-            previous = get_column_letter(column - 1)
-            self._put(34, column, f"={previous}34", border=GREY_BOX, fmt=PCT, align="center")
+        # Цены/затраты/зарплаты: рост с первого полного года после старта.
+        # Старт в январе → со 2-го календарного года; иначе (напр. декабрь) → с 3-го, без скачка в январе.
+        ops_start = _ops_inflation_start_offset(self.form)
+        for row, source, default_rate in (
+            (31, "$C$10", None),
+            (32, "$C$9", None),
+            (33, "$C$9", None),
+            (34, None, 0.05),
+        ):
+            for offset in range(1, self.years):
+                column = 3 + offset
+                if offset < ops_start:
+                    self._put(row, column, 0, border=GREY_BOX, fmt=PCT, align="center", fill=BLUE)
+                elif offset == ops_start:
+                    value = f"={source}" if source else default_rate
+                    self._put(row, column, value, border=GREY_BOX, fmt=PCT, align="center", fill=BLUE)
+                else:
+                    previous = get_column_letter(column - 1)
+                    self._put(row, column, f"={previous}{row}", border=GREY_BOX, fmt=PCT, align="center")
 
     def _indexes(self):
         self._put(
             35,
             1,
-            "Накопленный коэффициент — только для новой закупки этого года. Уже купленные активы он не переоценивает. Ноль в первые два года — правило методики: закупка при запуске берётся в цене анкеты.",
+            "Накопленный коэффициент — только для новой закупки этого года. Уже купленные активы он не переоценивает. CAPEX: ноль в первые два года. Цены и затраты: рост с первого полного года после старта (при старте не в январе — на год позже, без индексации сразу в январе).",
             wrap=True,
             font=Font(name=FONT_NAME, size=8, italic=True, color="44546A"),
         )
@@ -1246,7 +1291,10 @@ class PremisesBook:
                 ws.row_dimensions[row].height = 30
 
             index_row = start + len(lines)
-            addon = f"MAX(0,'{CAPEX}'!H{self.capex_total_row}-'{CAPEX}'!C{self.capex_total_row})"
+            addon = (
+                f"MAX(0,{self._capex_purchase_forecast(chr(39) + CAPEX + chr(39) + '!')}"
+                f"-{self._capex_purchase_base(chr(39) + CAPEX + chr(39) + '!')})"
+            )
             self._put(index_row, 1, len(lines) + 1, border=BOX, align="center")
             self._put(index_row, 2, "Добавка индексации CAPEX", border=BOX, wrap=True)
             self._put(index_row, 3, f"=D{index_row}+E{index_row}+F{index_row}+G{index_row}", border=BOX, fmt=MONEY, align="right")
@@ -1298,16 +1346,18 @@ class PremisesBook:
             ws.row_dimensions[share_row].height = 30
 
             wacc_row = share_row + 1
-            priced = f"(C{total_row}-G{total_row})"
-            self._put(wacc_row, 2, "Доля в WACC, без гранта", border=GREY_BOX, wrap=True)
+            in_kind = f"'{CAPEX}'!O{self.capex_total_row}" if self.capex_items else "0"
+            priced = f"(C{total_row}-G{total_row}+{in_kind})"
+            self._put(wacc_row, 2, "Доля в WACC, без гранта, с вкладом имуществом", border=GREY_BOX, wrap=True)
             self._put(wacc_row, 1, None, border=GREY_BOX)
             self._put(wacc_row, 3, None, border=GREY_BOX)
             for column in range(4, 7):
                 letter = get_column_letter(column)
+                capital = f"({letter}{total_row}+{in_kind})" if column == 6 else f"{letter}{total_row}"
                 self._put(
                     wacc_row,
                     column,
-                    f"=IF({priced}=0,0,{letter}{total_row}/{priced})",
+                    f"=IF({priced}=0,0,{capital}/{priced})",
                     border=GREY_BOX,
                     fmt=PCT_FINE,
                     align="center",
@@ -1353,7 +1403,24 @@ class PremisesBook:
             "vat_on": f"${value}$20",
             "vosms_rate": f"${value}$21",
             "social_tax_rate": f"${value}$22",
+            "sales_start_load": f"${value}$23",
+            "opv_rate": f"${value}$24",
+            "so_rate": f"${value}$25",
+            "opvr_rate": f"${value}$26",
+            "osms_rate": f"${value}$27",
+            "opvr_rate_2027": f"${value}$28",
+            "opvr_rate_2028": f"${value}$29",
+            "mrp": f"${value}$30",
+            "vat_threshold_mrp": f"${value}$31",
+            "simplified_limit_mrp": f"${value}$32",
         }
+
+    def _admin_rates(self) -> dict:
+        if not hasattr(self, "_admin_rates_cache"):
+            from app.fem_rates import load_rates
+
+            self._admin_rates_cache = load_rates()
+        return self._admin_rates_cache
 
     def _sources(self):
         label_column = YEAR_COLUMN + self.years + 1
@@ -1365,6 +1432,7 @@ class PremisesBook:
         loaded_base = national_bank_base_rate()
         base_rate = None if loaded_base is None else loaded_base[0]
         base_label = "Базовая ставка НБРК" if loaded_base is None else f"Базовая ставка НБРК с {loaded_base[1]}"
+        admin_rates = self._admin_rates()
         rows = (
             (2, "Собственные, ₸", self.own_link, MONEY, "right"),
             (3, "Привлекаемые, ₸", self.attracted_link, MONEY, "right"),
@@ -1414,6 +1482,16 @@ class PremisesBook:
             ),
             (21, "Ставка ВОСМС работника из анкеты", _form_pct(self.form, "vosms_rate", VOSMS_RATE), PCT_FINE, "center"),
             (22, "Ставка соцналога (ТОО ОУР) из анкеты", _form_pct(self.form, "social_tax_rate", SOCIAL_TAX_2026), PCT_FINE, "center"),
+            (23, "Загрузка в первый месяц продаж", _sales_start_load(self.form), PCT_FINE, "center"),
+            (24, "Ставка ОПВ работника из анкеты", _form_pct(self.form, "opv_rate", 0.10), PCT_FINE, "center"),
+            (25, "Ставка СО из анкеты", _form_pct(self.form, "so_rate", 0.05), PCT_FINE, "center"),
+            (26, "Ставка ОПВР из анкеты", _form_pct(self.form, "opvr_rate", 0.035), PCT_FINE, "center"),
+            (27, "Ставка ООСМС из анкеты", _form_pct(self.form, "osms_rate", 0.03), PCT_FINE, "center"),
+            (28, "Ставка ОПВР в 2027 (справочник)", _num(admin_rates.get("opvr_rate_2027")) / 100, PCT_FINE, "center"),
+            (29, "Ставка ОПВР с 2028 (справочник)", _num(admin_rates.get("opvr_rate_2028")) / 100, PCT_FINE, "center"),
+            (30, "МРП, ₸ (справочник)", _num(admin_rates.get("mrp")), MONEY, "right"),
+            (31, "Порог обязательного НДС, МРП в год", _num(admin_rates.get("vat_threshold_mrp")), "# ##0", "right"),
+            (32, "Лимит дохода упрощёнки, МРП в год", _num(admin_rates.get("simplified_limit_mrp")), "# ##0", "right"),
         )
         self._put(1, label_column, "Из анкеты", font=SECTION)
         for row, label, value, fmt, align in rows:
@@ -1425,6 +1503,8 @@ class PremisesBook:
         self._put(10, name_column, _horizon(self.form)[1], border=BOX, align="left", wrap=True)
         self._put(13, name_column, "Общий" if int(self.form.get("tax_regime") or 4) == 1 else "С выручки", border=BOX, align="left")
         self._put(18, name_column, "ТОО" if int(self.form.get("legal_form") or 1) == 2 else "ИП", border=BOX, align="left")
+        if _full_load_at_start(self.form):
+            self._put(23, name_column, "Выход на 100% в месяц старта: разгона нет, 100% с первого месяца", border=BOX, align="left", wrap=True)
         self._put(
             20,
             name_column,
@@ -1505,7 +1585,7 @@ class PremisesBook:
             self._put(
                 2,
                 1,
-                "Синие ячейки — из анкеты. Конечный месяц входит полностью. Количество и выручка года — сумма листа «Месяцы». Пустой год растёт по месяцам от 0% в месяц начала продаж до 100% в месяц выхода на объём. Заполненный год ставит свой процент на каждый месяц и не смешивается с этим ростом. Цена года = цена анкеты × накопленный индекс этого года на строке 47 / база C47. Разовый прочий доход не индексируется.",
+                "Синие ячейки — из анкеты. Конечный месяц входит полностью. Количество и выручка года — сумма листа «Месяцы». Пустой год растёт по месяцам от загрузки первого месяца продаж до 100% в месяц выхода на объём. Заполненный год ставит свой процент на каждый месяц и не смешивается с этим ростом. Цена года = цена анкеты × накопленный индекс этого года на строке 47 / база C47. Разовый прочий доход не индексируется.",
                 wrap=True,
                 font=Font(name=FONT_NAME, size=8, italic=True, color="44546A"),
             )
@@ -1800,11 +1880,12 @@ class PremisesBook:
             plan_start = f"'{SHEET}'!{dates['plan_start']}"
             plan_end = f"'{SHEET}'!{dates['plan_end']}"
             full_cell = f"'{REV}'!$B$6"
+            opening_cell = f"'{SHEET}'!{self._source_cells()['sales_start_load']}"
             self._put(1, 1, "Помесячный расчёт. Годовые итоги стоят на листе «План доходов».", font=SECTION)
             self._put(
                 2,
                 1,
-                "Конечный месяц входит полностью. Если год задан в анкете, каждый его месяц берёт этот процент. Пустой год растёт линейно от 0% в месяц начала продаж до 100% в месяц выхода на объём. Одинаковые даты дают 100% без деления на ноль. Свой график продукта заменяет график проекта.",
+                "Конечный месяц входит полностью. Если год задан в анкете, каждый его месяц берёт этот процент. Пустой год растёт линейно от загрузки первого месяца продаж до 100% в месяц выхода на объём. Одинаковые даты дают 100% без деления на ноль. Свой график продукта заменяет график проекта.",
                 wrap=True,
                 font=Font(name=FONT_NAME, size=8, italic=True, color="44546A"),
             )
@@ -1859,6 +1940,7 @@ class PremisesBook:
                         links["entered_row"],
                         links["flag_row"],
                         self.years,
+                        opening_cell,
                     ),
                     border=BOX,
                     fmt=PCT_FINE,
@@ -1879,6 +1961,7 @@ class PremisesBook:
                             product["entered_row"],
                             product["flag_row"],
                             self.years,
+                            opening_cell,
                         ),
                         border=BOX,
                         fmt=PCT_FINE,
@@ -1957,6 +2040,22 @@ class PremisesBook:
             )
             ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=2 + self.years)
             ws.row_dimensions[2].height = 48
+
+            from app.project_form import zero_cogs_state
+
+            cogs_state = zero_cogs_state(self.form)
+            if cogs_state["zero"]:
+                confirmed = "Пользователь подтвердил это допущение в анкете." if cogs_state["confirmed"] else "Допущение не подтверждено в анкете."
+                self._put(
+                    3,
+                    1,
+                    f"Внимание: себестоимость равна нулю при продажах больше нуля — вся выручка идёт в валовую прибыль. {confirmed}",
+                    wrap=True,
+                    fill=PINK,
+                    font=Font(name=FONT_NAME, size=9, bold=True, color="9C0006"),
+                )
+                ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=2 + self.years)
+                ws.row_dimensions[3].height = 30
 
             total_rows: list[int] = []
             row = 4
@@ -2173,11 +2272,13 @@ class PremisesBook:
             so_col = flag_col + 1
             osms_col = flag_col + 2
             opv_col = flag_col + 3
+            vosms_col = flag_col + 4
             for column, title, hint in (
                 (flag_col, "ОПВР", "1 — платить"),
                 (so_col, "СО", "1 — начислять"),
                 (osms_col, "ООСМС", "1 — начислять"),
                 (opv_col, "ОПВ работника", "1 — удерживать"),
+                (vosms_col, "ВОСМС работника", "1 — удерживать"),
             ):
                 self._put(2, column, title, border=BOX, align="center", wrap=True, fill=GRAY, font=Font(name=FONT_NAME, size=8, bold=True))
                 self._put(3, column, hint, border=BOX, align="center", wrap=True, fill=GRAY, font=Font(name=FONT_NAME, size=8, bold=True))
@@ -2197,6 +2298,7 @@ class PremisesBook:
                     self._put(row, so_col, 0 if person.get("so_exempt") else 1, border=BOX, fmt="0", align="center", fill=BLUE)
                     self._put(row, osms_col, 0 if person.get("osms_exempt") else 1, border=BOX, fmt="0", align="center", fill=BLUE)
                     self._put(row, opv_col, 0 if person.get("opv_exempt") else 1, border=BOX, fmt="0", align="center", fill=BLUE)
+                    self._put(row, vosms_col, 0 if person.get("vosms_exempt") else 1, border=BOX, fmt="0", align="center", fill=BLUE)
                     launch = bool(person.get("invest"))
                     for offset in range(self.years):
                         count_col = 4 + offset * 2
@@ -2214,7 +2316,7 @@ class PremisesBook:
             if not roster:
                 self._put(row, 1, "Штат в анкете не указан", font=SECTION)
                 row += 1
-            self._write_payroll_totals(row, roster, links, sales, first, last, flag_col, so_col, osms_col, opv_col)
+            self._write_payroll_totals(row, roster, links, sales, first, last, flag_col, so_col, osms_col, opv_col, vosms_col)
         finally:
             self.ws = previous
 
@@ -2248,7 +2350,7 @@ class PremisesBook:
             self._put(
                 1,
                 1,
-                "Логика расчёта: сумма в месяц × число платежей в году × индекс постоянных затрат (стр. 49 / C49). Период 0 — один раз, 1 — каждый месяц, 12 — раз в год. Колонка «Запуск» (= invest в Радуге): 1 — платит с начала проекта и дальше по всем годам (в каждом году — свои месяцы), 0 — только с даты начала продаж. ИТОГО — все строки. Строка «С начала проекта» — только с флагом 1 (уже входит в ИТОГО). ФОТ на этот лист не переносится.",
+                "Логика расчёта: сумма в месяц × число платежей в году × индекс постоянных затрат (стр. 49 / C49). Период 0 — один раз, 1 — каждый месяц, 12 — раз в год. Колонка «С нач. проекта»: 1 — платит с начала проекта и дальше по всем годам (в каждом году — свои месяцы), 0 — только с даты начала продаж. ИТОГО — все строки. Строка «С начала проекта» — только с флагом 1 (уже входит в ИТОГО). ФОТ на этот лист не переносится.",
                 wrap=True,
                 font=Font(name=FONT_NAME, size=8, italic=True, color="44546A"),
             )
@@ -2374,16 +2476,29 @@ class PremisesBook:
         self.fin_deficit_row = None
         self.capex_excess_row = None
 
+    def _capex_purchase_base(self, sheet_prefix: str = "") -> str:
+        """База CAPEX только новых покупок: строки с «Уже куплен» = 1 в финансирование не входят."""
+        if not self.capex_items:
+            return "0"
+        first, last = self.capex_first, self.capex_last
+        return f"SUMIF({sheet_prefix}N{first}:N{last},0,{sheet_prefix}C{first}:C{last})"
+
+    def _capex_purchase_forecast(self, sheet_prefix: str = "") -> str:
+        """Прогноз новых покупок = колонка «К оплате» (у уже купленных там 0)."""
+        if not self.capex_items:
+            return "0"
+        return f"{sheet_prefix}M{self.capex_total_row}"
+
     def _financing_gap(self, wacc_row: int):
         """Прогноз CAPEX увеличивает потребность. Добавка индексации уже включена в источник."""
-        total = f"'{CAPEX}'!C{self.capex_total_row}"
-        forecast = f"'{CAPEX}'!H{self.capex_total_row}"
+        total = self._capex_purchase_base(f"'{CAPEX}'!")
+        forecast = self._capex_purchase_forecast(f"'{CAPEX}'!")
         if self.fin_first:
             invested = f'SUMIF(I{self.fin_first}:I{self.fin_last},"Капитальные затраты",C{self.fin_first}:C{self.fin_last})'
         else:
             invested = "0"
         row = wacc_row + 2
-        self._put(row, 2, "CAPEX по анкете, реестр", border=GREY_BOX, wrap=True)
+        self._put(row, 2, "CAPEX к покупке, реестр (без уже купленного)", border=GREY_BOX, wrap=True)
         self._put(row, 3, f"={total}", border=GREY_BOX, fmt=MONEY, align="right")
         base_row = row
         row += 1
@@ -2424,6 +2539,19 @@ class PremisesBook:
         )
         self.ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=8)
         self.ws.row_dimensions[row].height = 28
+        row += 2
+        self._put(row, 2, "Вклад собственника имуществом (уже имеющиеся активы, балансовая)", border=GREY_BOX, wrap=True)
+        self._put(row, 3, f"='{CAPEX}'!O{self.capex_total_row}" if self.capex_items else 0, border=GREY_BOX, fmt=MONEY, align="right", fill=PURPLE)
+        row += 1
+        self._put(
+            row,
+            2,
+            "Одна база капитала для WACC и для доли инвестора: новые деньги без гранта + вклад имуществом. Вклад имуществом входит в долю собственных средств в строке «Доля в WACC». Балансовая стоимость — не рыночная оценка бизнеса; при сделке по рыночной оценке поменяйте условия вручную.",
+            wrap=True,
+            font=Font(name=FONT_NAME, size=8, italic=True, color="44546A"),
+        )
+        self.ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=8)
+        self.ws.row_dimensions[row].height = 40
 
     def _capex_register(self):
         """Единственное место, где из базы и индекса получается прогнозная стоимость CAPEX."""
@@ -2438,18 +2566,18 @@ class PremisesBook:
             ws.page_setup.paperSize = ws.PAPERSIZE_A4
             ws.sheet_format.defaultRowHeight = 18
             widths = {"A": 32, "B": 18}
-            for column in range(3, 14):
+            for column in range(3, 16):
                 widths[get_column_letter(column)] = 16
             for letter, width in widths.items():
                 ws.column_dimensions[letter].width = width
             self._put(
                 1,
                 1,
-                "Единственный расчёт CAPEX. Прогноз = база × индекс строки 46 за год покупки. Дата оплаты и дата ввода задаются отдельно; если месяц не указан, для оплаты берётся первый месяц года внутри плана (в год старта — месяц начала плана), без подмены на 1 января при явной дате. Дата ввода по умолчанию равна оплате. Уже купленный актив: «К оплате» = 0, амортизация от балансовой стоимости. Срок 0 — не капитализируется. ДДС платит колонку «К оплате» один раз.",
+                "Единственный расчёт CAPEX. Прогноз = база × индекс строки 46 за год покупки. Дата оплаты и дата ввода задаются отдельно; если месяц не указан, для оплаты берётся первый месяц года внутри плана (в год старта — месяц начала плана), без подмены на 1 января при явной дате. Дата ввода по умолчанию равна оплате. Ранее приобретённый актив («Уже куплен» = 1) — не новое вложение: прогноз новых вложений и «К оплате» = 0, его балансовая стоимость идёт в отдельную колонку O, от неё амортизация. Срок 0 — не капитализируется. ДДС платит колонку «К оплате» один раз.",
                 wrap=True,
                 font=Font(name=FONT_NAME, size=8, italic=True, color="44546A"),
             )
-            ws.merge_cells("A1:N1")
+            ws.merge_cells("A1:O1")
             ws.row_dimensions[1].height = 62
             headers = (
                 "Наименование",
@@ -2459,13 +2587,14 @@ class PremisesBook:
                 "Срок, лет",
                 "Капитализируется",
                 "Индекс CAPEX",
-                "Прогноз",
+                "Прогноз новых вложений",
                 "Дата оплаты",
                 "Дата ввода",
                 "Начало амортизации",
                 "Амортизируемая стоимость",
                 "К оплате",
                 "Уже куплен",
+                "Ранее приобретено, балансовая",
             )
             for column, text in enumerate(headers, start=1):
                 self._put(2, column, text, border=BOX, align="center", wrap=True, fill=GRAY, font=Font(name=FONT_NAME, size=8, bold=True))
@@ -2497,40 +2626,53 @@ class PremisesBook:
                 self._put(row, 5, item["life"], border=BOX, fmt="0", align="center", fill=BLUE)
                 self._put(row, 6, f"=IF(E{row}>0,1,0)", border=BOX, fmt="0", align="center")
                 self._put(row, 7, f"={_capex_purchase_index(year_cell, self.years)}", border=BOX, fmt="0.000", align="center")
-                self._put(row, 8, f"=C{row}*G{row}", border=BOX, fmt=MONEY, align="right")
+                self._put(row, 8, f"=IF(N{row}=1,0,C{row}*G{row})", border=BOX, fmt=MONEY, align="right")
                 self._put(row, 9, f"={pay_formula}", border=BOX, fmt="DD.MM.YYYY", align="center", fill=BLUE if pay_lit else None)
                 self._put(row, 10, f"={commission_formula}", border=BOX, fmt="DD.MM.YYYY", align="center", fill=BLUE if commission_lit else None)
                 self._put(row, 11, f"=J{row}", border=BOX, fmt="DD.MM.YYYY", align="center")
-                # Уже купленный: амортизируем балансовую стоимость без повторной индексации покупки.
-                if owned:
-                    self._put(row, 12, f"=IF(F{row}=1,{book if book > 0 else f'C{row}'},0)", border=BOX, fmt=MONEY, align="right", fill=BLUE)
-                    self._put(row, 13, 0, border=BOX, fmt=MONEY, align="right")
-                else:
-                    self._put(row, 12, f"=IF(F{row}=1,H{row},0)", border=BOX, fmt=MONEY, align="right")
-                    self._put(row, 13, f"=H{row}", border=BOX, fmt=MONEY, align="right")
+                self._put(row, 12, f"=IF(F{row}=1,IF(N{row}=1,O{row},H{row}),0)", border=BOX, fmt=MONEY, align="right")
+                self._put(row, 13, f"=H{row}", border=BOX, fmt=MONEY, align="right")
                 self._put(row, 14, owned, border=BOX, fmt="0", align="center", fill=BLUE)
+                book_value = book if book > 0 else f"C{row}"
+                self._put(row, 15, f"=IF(N{row}=1,{book_value},0)", border=BOX, fmt=MONEY, align="right", fill=BLUE if owned else None)
             total = self.capex_total_row
             self._put(total, 1, "Итого", border=BOX, fill=GREEN, font=Font(name=FONT_NAME, size=10, bold=True))
             self._put(total, 2, None, border=BOX, fill=GREEN)
             if self.capex_items:
                 last = self.capex_last
-                sums = {3: "C", 8: "H", 12: "L", 13: "M"}
-                for column in range(3, 15):
+                sums = {3: "C", 8: "H", 12: "L", 13: "M", 15: "O"}
+                for column in range(3, 16):
                     letter = get_column_letter(column)
                     value = f"=SUM({letter}{first}:{letter}{last})" if column in sums else None
                     fmt = "0.000" if column == 7 else (MONEY if column in sums else None)
                     self._put(total, column, value, border=BOX, fmt=fmt, align="right" if column >= 3 else "center", fill=GREEN, font=Font(name=FONT_NAME, size=10, bold=True))
             else:
-                for column, value in ((3, 0), (8, 0), (12, 0), (13, 0)):
+                for column, value in ((3, 0), (8, 0), (12, 0), (13, 0), (15, 0)):
                     self._put(total, column, value, border=BOX, fmt=MONEY, align="right", fill=GREEN)
             ws.column_dimensions["N"].width = 12
+            ws.column_dimensions["O"].width = 18
 
+            if self.capex_items:
+                owned_base = f"SUMIF(N{first}:N{self.capex_last},1,C{first}:C{self.capex_last})"
+            else:
+                owned_base = "0"
             row = total + 2
             self._put(row, 1, "Проверки", font=SECTION)
             row += 1
-            base_row = row
-            self._put(row, 1, "База реестра", border=BOX)
+            all_row = row
+            self._put(row, 1, "База реестра, всего", border=BOX)
             self._put(row, 3, f"=C{total}", border=BOX, fmt=MONEY, align="right")
+            row += 1
+            owned_row = row
+            self._put(row, 1, "в т.ч. ранее приобретённые активы (цена в анкете)", border=BOX, wrap=True)
+            self._put(row, 3, f"={owned_base}", border=BOX, fmt=MONEY, align="right")
+            row += 1
+            base_row = row
+            self._put(row, 1, "в т.ч. новые капитальные вложения", border=BOX, wrap=True)
+            self._put(row, 3, f"={self._capex_purchase_base()}", border=BOX, fmt=MONEY, align="right")
+            row += 1
+            self._put(row, 1, "Ранее приобретённые + новые = всего", border=BOX, wrap=True)
+            self._put(row, 3, f'=IF(ABS(C{owned_row}+C{base_row}-C{all_row})<1,"сходится","расхождение")', border=BOX, align="left")
             row += 1
             invested_row = row
             if self.fin_first:
@@ -2540,11 +2682,11 @@ class PremisesBook:
             self._put(row, 1, "CAPEX в инвестиционных затратах", border=BOX, wrap=True)
             self._put(row, 3, f"={invested}", border=BOX, fmt=MONEY, align="right")
             row += 1
-            self._put(row, 1, "База реестра = CAPEX в затратах", border=BOX, wrap=True)
+            self._put(row, 1, "Новые вложения = CAPEX в затратах", border=BOX, wrap=True)
             self._put(row, 3, f'=IF(ABS(C{base_row}-C{invested_row})<1,"сходится","расхождение")', border=BOX, align="left")
             row += 1
             forecast_row = row
-            self._put(row, 1, "Прогноз CAPEX", border=BOX)
+            self._put(row, 1, "Прогноз новых вложений", border=BOX)
             self._put(row, 3, f"=H{total}", border=BOX, fmt=MONEY, align="right")
             row += 1
             pay_row = row
@@ -2553,6 +2695,17 @@ class PremisesBook:
             row += 1
             self._put(row, 1, "Платежи CAPEX = план оплат", border=BOX, wrap=True)
             self._put(row, 3, f'=IF(ABS(C{pay_row}-C{forecast_row})<1,"сходится, ДДС платит эту сумму один раз","расхождение")', border=BOX, align="left", wrap=True)
+            ws.row_dimensions[row].height = 28
+            row += 1
+            self._put(row, 1, "Ранее приобретённые активы, балансовая (для амортизации)", border=BOX, wrap=True)
+            self._put(row, 3, f"=O{total}", border=BOX, fmt=MONEY, align="right")
+            row += 1
+            if self.capex_items:
+                owned_paid = f"SUMIF(N{first}:N{self.capex_last},1,M{first}:M{self.capex_last})"
+            else:
+                owned_paid = "0"
+            self._put(row, 1, "Ранее приобретённые не оплачиваются в ДДС", border=BOX, wrap=True)
+            self._put(row, 3, f'=IF({owned_paid}<1,"не оплачиваются, только амортизация","повторная оплата")', border=BOX, align="left", wrap=True)
             ws.row_dimensions[row].height = 28
             row += 1
             self._put(row, 1, "Амортизируемая стоимость", border=BOX, wrap=True)
@@ -2618,9 +2771,9 @@ class PremisesBook:
                 font=Font(name=FONT_NAME, size=8, italic=True, color="44546A"),
             )
             self.ws.merge_cells("A52:B52")
-            self._put(53, 1, "CAPEX по анкете", border=GREY_BOX)
-            self._put(53, 3, f"='{CAPEX}'!C{self.capex_total_row}", border=GREY_BOX, fmt=MONEY, align="right")
-            self._put(54, 1, "CAPEX прогноз", border=GREY_BOX)
+            self._put(53, 1, "Новые вложения CAPEX по анкете", border=GREY_BOX)
+            self._put(53, 3, f"={self._capex_purchase_base(chr(39) + CAPEX + chr(39) + '!')}", border=GREY_BOX, fmt=MONEY, align="right")
+            self._put(54, 1, "Новые вложения CAPEX, прогноз", border=GREY_BOX)
             self._put(54, 3, f"='{CAPEX}'!H{self.capex_total_row}", border=GREY_BOX, fmt=MONEY, align="right")
         finally:
             self.ws = previous
@@ -2780,7 +2933,20 @@ class PremisesBook:
         finally:
             self.ws = previous
 
-    def _write_payroll_totals(self, row: int, roster: list[dict], links: dict, sales: str, first: int, last: int, flag_col: int, so_col: int, osms_col: int, opv_col: int):
+    def _write_payroll_totals(
+        self,
+        row: int,
+        roster: list[dict],
+        links: dict,
+        sales: str,
+        first: int,
+        last: int,
+        flag_col: int,
+        so_col: int,
+        osms_col: int,
+        opv_col: int,
+        vosms_col: int,
+    ):
         """Итоги АУП и производства и помесячные отчисления. Оклад в годовой ячейке не заменяется."""
         self.pay_month_first = None
         self.pay_month_last = None
@@ -2844,7 +3010,7 @@ class PremisesBook:
         self._put(
             row,
             1,
-            "СО — 5% с 2025 (раньше 3,5%) от начисления минус ОПВ 10%, база 1–7 МЗП. ОПВР — лестница до 5% к 2028, база 1–50 МЗП. ООСМС — 3% с 2023, потолок 40 МЗП с 2026. ВОСМС работника — 2%, база до 20 МЗП (nalogikz 2026). Соцналог юрлица на ОУР: с 2026 — 6% от начисления без вычета СО; до 2026 — max(0; ставка×(начисление−ОПВ−ВОСМС)−СО). ИП на ОУР платит СН в МРП — в этой модели не развёрнут. На упрощёнке СН = 0. Удержания ОПВ и ВОСМС уменьшают «к выплате» в ДДС и перечисляются в «Налоги ФОТ».",
+            "Ставки — «Предпосылки», строки 21–29. СО от начисления минус ОПВ, база 1–7 МЗП. ОПВР по годам: до 2026 — ставка анкеты (строка 26), 2027 — строка 28, с 2028 — строка 29; база 1–50 МЗП. ООСМС — потолок 40 МЗП с 2026. ВОСМС работника — 2%, база до 20 МЗП (nalogikz 2026). Соцналог юрлица на ОУР: с 2026 — 6% от начисления без вычета СО; до 2026 — max(0; ставка×(начисление−ОПВ−ВОСМС)−СО). ИП на ОУР платит СН в МРП — в этой модели не развёрнут. На упрощёнке СН = 0. Удержания ОПВ и ВОСМС уменьшают «к выплате» в ДДС и перечисляются в «Налоги ФОТ».",
             wrap=True,
             font=Font(name=FONT_NAME, size=8, italic=True, color="44546A"),
         )
@@ -2964,19 +3130,27 @@ class PremisesBook:
                 self._put(cursor, 10, f"=IF(F{cursor}=0,0,$B${staff}/100*({income}))", border=BOX, fmt=MONEY, align="right")
                 self._put(cursor, 8, f"=IF(F{cursor}=0,0,$C${staff}*G{cursor}*({index})+J{cursor})", border=BOX, fmt=MONEY, align="right")
                 self._put(cursor, 9, f"=IF(OR(F{cursor}=0,G{cursor}=0),0,$C${staff}*({index})+IF(G{cursor}=0,0,$B${staff}/100*({income})/G{cursor}))", border=BOX, fmt=MONEY, align="right")
-                so_rate = f"IF(B{cursor}>=2025,0.05,0.035)"
-                opvr_rate = f"IF(B{cursor}<=2023,0,IF(B{cursor}=2024,0.015,IF(B{cursor}=2025,0.025,IF(B{cursor}=2026,0.035,IF(B{cursor}=2027,0.045,0.05)))))"
-                osms_rate = f"IF(B{cursor}>=2023,0.03,0.02)"
+                sources = self._source_cells()
+                so_rate = f"'{SHEET}'!{sources['so_rate']}"
+                opvr_rate = (
+                    f"IF(B{cursor}<=2026,'{SHEET}'!{sources['opvr_rate']},"
+                    f"IF(B{cursor}=2027,'{SHEET}'!{sources['opvr_rate_2027']},'{SHEET}'!{sources['opvr_rate_2028']}))"
+                )
+                osms_rate = f"'{SHEET}'!{sources['osms_rate']}"
+                opv_rate = f"'{SHEET}'!{sources['opv_rate']}"
                 osms_cap = f"IF(B{cursor}>=2026,40,10)"
                 opvr_flag = f"{get_column_letter(flag_col)}{staff}"
                 so_flag = f"{get_column_letter(so_col)}{staff}"
                 osms_flag = f"{get_column_letter(osms_col)}{staff}"
                 opv_flag = f"{get_column_letter(opv_col)}{staff}"
-                employee_opv = f"IF({opv_flag}=0,0,0.1*MIN(I{cursor},50*{wage}))"
-                vosms_cell = f"'{SHEET}'!{self._source_cells()['vosms_rate']}"
-                sn_cell = f"'{SHEET}'!{self._source_cells()['social_tax_rate']}"
+                vosms_flag = f"{get_column_letter(vosms_col)}{staff}"
+                employee_opv = f"IF({opv_flag}=0,0,({opv_rate})*MIN(I{cursor},50*{wage}))"
+                vosms_cell = f"'{SHEET}'!{sources['vosms_rate']}"
+                sn_cell = f"'{SHEET}'!{sources['social_tax_rate']}"
                 # ВОСМС из анкеты, потолок 20 МЗП (НК 2026).
-                employee_vosms = f"IF(F{cursor}=0,0,G{cursor}*({vosms_cell})*MIN(I{cursor},20*{wage}))"
+                employee_vosms = (
+                    f"IF(OR(F{cursor}=0,{vosms_flag}=0),0,G{cursor}*({vosms_cell})*MIN(I{cursor},20*{wage}))"
+                )
                 so_base = f"MIN(MAX(I{cursor}-({employee_opv}),{wage}),7*{wage})"
                 self._put(cursor, 11, f"=IF(OR(F{cursor}=0,{so_flag}=0),0,G{cursor}*({so_rate})*({so_base}))", border=BOX, fmt=MONEY, align="right")
                 self._put(cursor, 12, f"=IF(OR(F{cursor}=0,{opvr_flag}=0),0,G{cursor}*({opvr_rate})*MIN(MAX(I{cursor},{wage}),50*{wage}))", border=BOX, fmt=MONEY, align="right")
@@ -3673,7 +3847,7 @@ class PremisesBook:
             if sources:
                 cash_hint = (
                     f'=IF(MAX(B33:{last_letter}33)<1,"Помесячный остаток. Кассового разрыва нет.",'
-                    f'IFERROR("Деньги заканчиваются "&TEXT(AGGREGATE(15,6,(A{span_first}:A{span_last})/(S{span_first}:S{span_last}<0),1),"MM.YYYY")&". ","")'
+                    f'IFERROR("Деньги заканчиваются "&TEXT(_xlfn.AGGREGATE(15,6,(A{span_first}:A{span_last})/(S{span_first}:S{span_last}<0),1),"MM.YYYY")&". ","")'
                     f'&"К концу плана не хватает "&TEXT(MAX(B33:{last_letter}33),"# ##0")'
                     f'&". Варианты: увеличить взнос инвестора, добавить кредит, снизить постоянные расходы.")'
                 )
@@ -3971,10 +4145,10 @@ class PremisesBook:
             ws.column_dimensions[get_column_letter(check_column)].width = 28
             ws.column_dimensions[get_column_letter(check_value)].width = 18
             paid = "=" + "+".join(capex_letters)
-            register = f"='{CAPEX}'!M{self.capex_total_row}" if self.capex_items else "=0"
+            register = f"='{CAPEX}'!M{self.capex_total_row}*{vat_factor}" if self.capex_items else "=0"
             self._put(capex_row, check_column, "Оплаты CAPEX за все годы", border=GREY_BOX, wrap=True, font=Font(name=FONT_NAME, size=8))
             self._put(capex_row, check_value, paid, border=GREY_BOX, fmt=MONEY, align="right")
-            self._put(stock_row, check_column, "Реестр, к оплате", border=GREY_BOX, wrap=True, font=Font(name=FONT_NAME, size=8))
+            self._put(stock_row, check_column, "Реестр, к оплате (с НДС у плательщика)", border=GREY_BOX, wrap=True, font=Font(name=FONT_NAME, size=8))
             self._put(stock_row, check_value, register, border=GREY_BOX, fmt=MONEY, align="right", fill=PURPLE)
             self._put(
                 preopen_row,
@@ -4064,7 +4238,7 @@ class PremisesBook:
             return "0"
         parts = []
         for row in range(self.capex_first, self.capex_last + 1):
-            cost = f"'{CAPEX}'!H{row}"
+            cost = f"('{CAPEX}'!H{row}+'{CAPEX}'!O{row})"
             life = f"'{CAPEX}'!E{row}"
             pay = f"'{CAPEX}'!I{row}"
             start = f"'{CAPEX}'!K{row}"
@@ -4144,8 +4318,8 @@ class PremisesBook:
             cash = f"{get_column_letter(cash_column)}{origin}:{get_column_letter(cash_column)}{last}"
             rate = f"XIRR({flow},{dates})"
             irr = (
-                f'IF(OR(MAX({flow})<=0,MIN({flow})>=0),"нет смены знака",'
-                f'IFERROR(IF({rate}<=-0.99,"не определяется",{rate}),"не определяется"))'
+                f'IF(MIN({flow})>=0,"{NO_OUTFLOW}",IF(MAX({flow})<=0,"{NO_INFLOW}",'
+                f'IFERROR(IF({rate}<=-0.99,"не определяется",{rate}),"не определяется")))'
             )
             self._put(row, 53, title, border=BOX, wrap=True)
             self._put(row, 54, f"=SUMPRODUCT({flow},{discount})", border=BOX, fmt=MONEY, align="right")
@@ -4249,7 +4423,13 @@ class PremisesBook:
             self._put(16, 1, "Срок участия, лет", border=BOX)
             self._put(16, 2, f"='{SHEET}'!{cells['investor_term']}", border=BOX, fmt="0", align="center", fill=PURPLE)
             self._put(17, 1, "Доля инвестора в собственном капитале", border=BOX, wrap=True)
-            self._put(17, 2, f"=IF({investor_total}+{own_total}=0,0,{investor_total}/({investor_total}+{own_total}))", border=BOX, fmt=PCT_FINE, align="center", fill=PURPLE, font=bold)
+            self._put(17, 2, f"=IF({investor_total}+{own_total}+I19=0,0,{investor_total}/({investor_total}+{own_total}+I19))", border=BOX, fmt=PCT_FINE, align="center", fill=PURPLE, font=bold)
+            self._put(19, 8, "Вклад собственника имуществом (уже имеющиеся активы, балансовая)", border=BOX, wrap=True)
+            in_kind = f"='{CAPEX}'!O{self.capex_total_row}" if self.capex_items else 0
+            self._put(19, 9, in_kind, border=BOX, fmt=MONEY, align="right", fill=PURPLE)
+            self._put(20, 8, "Доля = взнос инвестора / (взнос инвестора + собственные деньги + вклад имуществом)", border=BOX, wrap=True, font=Font(name=FONT_NAME, size=8, italic=True, color="44546A"))
+            ws.row_dimensions[19].height = 30
+            ws.row_dimensions[20].height = 30
             self._put(18, 1, "Налоговый щит процентов", border=BOX)
             self._put(18, 2, f"='{SHEET}'!C22", border=BOX, fmt=PCT_FINE, align="center", fill=PURPLE)
             self._put(13, 8, "Режим: 1 конец прогноза, 2 полный выход", border=BOX, wrap=True)
@@ -4389,8 +4569,8 @@ class PremisesBook:
                 def annual_irr(flow: str, date_range: str) -> str:
                     rate = f"XIRR({flow},{date_range})"
                     return (
-                        f'IF(OR(MAX({flow})<=0,MIN({flow})>=0),"нет смены знака",'
-                        f'IFERROR(IF({rate}<=-0.99,"не определяется",{rate}),"не определяется"))'
+                        f'IF(MIN({flow})>=0,"{NO_OUTFLOW}",IF(MAX({flow})<=0,"{NO_INFLOW}",'
+                        f'IFERROR(IF({rate}<=-0.99,"не определяется",{rate}),"не определяется")))'
                     )
 
                 def payback(flag_col: str, cum_col: str, flow_col: str) -> str:
@@ -4488,22 +4668,22 @@ class PremisesBook:
                 )
                 self._put(6, 4, f'=IF(SUM(AB{origin}:AB{last})>1,"Неоднозначен: несколько смен знака","")', border=BOX, align="center", wrap=True, font=Font(name=FONT_NAME, size=8, color="9C5700"))
                 self._put(6, 5, f'=IF(SUM(AD{origin}:AD{last})>1,"Неоднозначен: несколько смен знака","")', border=BOX, align="center", wrap=True, font=Font(name=FONT_NAME, size=8, color="9C5700"))
-                self._put(7, 2, f'=IF($I$13=2,IF(-SUM(U{origin}:U{last})<1,"нет вложений",SUM(T{origin}:T{last})/-SUM(U{origin}:U{last})),IF(-SUM(U{origin}:U{forecast_last})<1,"нет вложений",SUM(T{origin}:T{forecast_last})/-SUM(U{origin}:U{forecast_last})))', border=BOX, fmt="0.00", align="center")
+                self._put(7, 2, f'=IF($I$13=2,IF(-SUM(U{origin}:U{last})<1,"{NO_OUTFLOW}",SUM(T{origin}:T{last})/-SUM(U{origin}:U{last})),IF(-SUM(U{origin}:U{forecast_last})<1,"{NO_OUTFLOW}",SUM(T{origin}:T{forecast_last})/-SUM(U{origin}:U{forecast_last})))', border=BOX, fmt="0.00", align="center")
                 self._put(
                     7,
                     3,
-                    f'=IF(({investor_total})<1,"Не применяется",IF($I$13=2,IF(-SUM(W{origin}:W{last})<1,"нет вложений",SUM(V{origin}:V{last})/-SUM(W{origin}:W{last})),IF(-SUM(W{origin}:W{forecast_last})<1,"нет вложений",SUM(V{origin}:V{forecast_last})/-SUM(W{origin}:W{forecast_last}))))',
+                    f'=IF(({investor_total})<1,"Не применяется",IF($I$13=2,IF(-SUM(W{origin}:W{last})<1,"{NO_OUTFLOW}",SUM(V{origin}:V{last})/-SUM(W{origin}:W{last})),IF(-SUM(W{origin}:W{forecast_last})<1,"{NO_OUTFLOW}",SUM(V{origin}:V{forecast_last})/-SUM(W{origin}:W{forecast_last}))))',
                     border=BOX,
                     fmt="0.00",
                     align="center",
                 )
                 self._put(7, 4, f'=IF(SUM(AB{origin}:AB{last})>1,"Неоднозначен: несколько смен знака","")', border=BOX, align="center", wrap=True, font=Font(name=FONT_NAME, size=8, color="9C5700"))
                 self._put(7, 5, f'=IF(SUM(AD{origin}:AD{last})>1,"Неоднозначен: несколько смен знака","")', border=BOX, align="center", wrap=True, font=Font(name=FONT_NAME, size=8, color="9C5700"))
-                self._put(8, 2, payback("P", "C", "B"), border=BOX, fmt="0.00", align="center")
+                self._put(8, 2, f'=IF(MIN(C{origin}:C{last})>=0,"{NO_OUTFLOW}",{payback("P", "C", "B")[1:]})', border=BOX, fmt="0.00", align="center")
                 self._put(8, 3, f'=IF(({investor_total})<1,"Не применяется",{payback("R", "K", "J")[1:]})', border=BOX, fmt="0.00", align="center")
                 self._put(8, 4, f'=IF(OR(AND(NOT(ISNUMBER(B8)),SUMPRODUCT((C{origin + 1}:C{last}>=0)*(C{origin}:C{last - 1}<0))+((C{origin}>=0)*(B{origin}>0))>0),SUMPRODUCT((C{origin + 1}:C{last}>=0)*(C{origin}:C{last - 1}<0))+((C{origin}>=0)*(B{origin}>0))>1),"Был временный плюс","")', border=BOX, align="center", wrap=True, font=Font(name=FONT_NAME, size=8, color="9C5700"))
                 self._put(8, 5, f'=IF(OR(AND(NOT(ISNUMBER(C8)),SUMPRODUCT((K{origin + 1}:K{last}>=0)*(K{origin}:K{last - 1}<0))+((K{origin}>=0)*(J{origin}>0))>0),SUMPRODUCT((K{origin + 1}:K{last}>=0)*(K{origin}:K{last - 1}<0))+((K{origin}>=0)*(J{origin}>0))>1),"Был временный плюс","")', border=BOX, align="center", wrap=True, font=Font(name=FONT_NAME, size=8, color="9C5700"))
-                self._put(9, 2, payback("Q", "F", "E"), border=BOX, fmt="0.00", align="center")
+                self._put(9, 2, f'=IF(MIN(F{origin}:F{last})>=0,"{NO_OUTFLOW}",{payback("Q", "F", "E")[1:]})', border=BOX, fmt="0.00", align="center")
                 self._put(9, 3, f'=IF(({investor_total})<1,"Не применяется",{payback("S", "N", "M")[1:]})', border=BOX, fmt="0.00", align="center")
                 self._put(9, 4, f'=IF(OR(AND(NOT(ISNUMBER(B9)),SUMPRODUCT((F{origin + 1}:F{last}>=0)*(F{origin}:F{last - 1}<0))+((F{origin}>=0)*(E{origin}>0))>0),SUMPRODUCT((F{origin + 1}:F{last}>=0)*(F{origin}:F{last - 1}<0))+((F{origin}>=0)*(E{origin}>0))>1),"Был временный плюс","")', border=BOX, align="center", wrap=True, font=Font(name=FONT_NAME, size=8, color="9C5700"))
                 self._put(9, 5, f'=IF(OR(AND(NOT(ISNUMBER(C9)),SUMPRODUCT((N{origin + 1}:N{last}>=0)*(N{origin}:N{last - 1}<0))+((N{origin}>=0)*(M{origin}>0))>0),SUMPRODUCT((N{origin + 1}:N{last}>=0)*(N{origin}:N{last - 1}<0))+((N{origin}>=0)*(M{origin}>0))>1),"Был временный плюс","")', border=BOX, align="center", wrap=True, font=Font(name=FONT_NAME, size=8, color="9C5700"))
@@ -4511,8 +4691,8 @@ class PremisesBook:
                 def annual_mirr(flow: str, rate_cell: str) -> str:
                     monthly = f"((1+{rate_cell})^(1/12)-1)"
                     return (
-                        f'IF(OR(MAX({flow})<=0,MIN({flow})>=0),"нет смены знака",'
-                        f'IFERROR((1+MIRR({flow},{monthly},{monthly}))^12-1,"не определяется"))'
+                        f'IF(MIN({flow})>=0,"{NO_OUTFLOW}",IF(MAX({flow})<=0,"{NO_INFLOW}",'
+                        f'IFERROR((1+MIRR({flow},{monthly},{monthly}))^12-1,"не определяется")))'
                     )
 
                 self._put(12, 1, "MIRR, годовая по месяцам", border=BOX, wrap=True)
@@ -4626,9 +4806,21 @@ class PremisesBook:
                 self._scenarios(origin, forecast_last, first_dds)
                 drawn = f"'{FIN}'!D{self.fin_total_row}"
                 paid_principal = "+".join(f"'{CF}'!{get_column_letter(2 + offset)}{cf['principal']}" for offset in range(self.years))
-                register = f"'{CAPEX}'!M{self.capex_total_row}" if self.capex_items else "0"
+                register = (
+                    f"'{CAPEX}'!M{self.capex_total_row}*(1+IF('{SHEET}'!{cells['vat_on']}=1,'{SHEET}'!{cells['vat_rate']},0))"
+                    if self.capex_items
+                    else "0"
+                )
                 capex_paid = "+".join(f"'{CF}'!M{first_dds + index}" for index in range(count))
                 audit = last + 2
+                pnl_last = get_column_letter(1 + self.years)
+                cogs_confirmed = bool(self.form.get("zero_cogs_confirmed"))
+                revenue_years = f"'{PNL}'!$B${self.pnl['revenue']}:${pnl_last}${self.pnl['revenue']}"
+                mrp_cell = f"'{SHEET}'!{cells['mrp']}"
+                vat_threshold = f"'{SHEET}'!{cells['vat_threshold_mrp']}*{mrp_cell}"
+                simplified_limit = f"'{SHEET}'!{cells['simplified_limit_mrp']}*{mrp_cell}"
+                prod_fot = f"'{PNL}'!$B${self.pnl['prod']}:${pnl_last}${self.pnl['prod']}"
+                admin_fot = f"'{PNL}'!$B${self.pnl['admin_fot']}:${pnl_last}${self.pnl['admin_fot']}"
                 self._put(audit, 1, "Проверки", font=SECTION)
                 audit_rows = (
                     (1, "FCFF без финансирования", f'=IF(MAX(AE{origin}:AE{end})<1,"OK","Ошибка")', "Отклонение FCFF от формулы без взносов, кредита, гранта, тела и дивидендов"),
@@ -4646,6 +4838,32 @@ class PremisesBook:
                     (9, "Профиль потока проекта", f'=IF(SUM(AB{origin}:AB{last})>1,"Предупреждение","OK")', "Больше одной смены знака делает IRR и PI неоднозначными. Текст стоит рядом с IRR"),
                     (10, "Профиль потока инвестора", f'=IF(SUM(AD{origin}:AD{last})>1,"Предупреждение","OK")', "Больше одной смены знака делает показатели инвестора неоднозначными"),
                     (11, "Полнота оценки инвестора", f'=IF($B$16<=0,"OK",IF({exit_date}<={plan_end},"OK",IF(AND($I$13=2,A{last}>={exit_date}),"OK","Предупреждение")))', "Режим 1 не включает выход после плана. Режим 2 включает его, если продление дошло до даты"),
+                    (12, "Себестоимость при продажах", (
+                        f'=IF(SUM(\'{PNL}\'!B{self.pnl["revenue"]}:{pnl_last}{self.pnl["revenue"]})<=0,"OK",'
+                        f'IF(ABS(SUM(\'{PNL}\'!B{self.pnl["cogs"]}:{pnl_last}{self.pnl["cogs"]}))>=1,"OK",'
+                        f'"{"Допущение" if cogs_confirmed else "Предупреждение"}"))'
+                    ), (
+                        "Себестоимость 0 при выручке > 0: вся выручка в валовой прибыли. "
+                        + ("Пользователь подтвердил это допущение в анкете" if cogs_confirmed else "Допущение не подтверждено в анкете")
+                    )),
+                    (13, "Порог обязательного НДС", (
+                        f"=IF('{SHEET}'!{cells['vat_on']}=1,\"OK\","
+                        f"IF(COUNTIF({revenue_years},\">\"&({vat_threshold}))=0,\"OK\","
+                        f"\"Предупреждение: лет сверх порога — \"&COUNTIF({revenue_years},\">\"&({vat_threshold}))))"
+                    ), "Годовая выручка ОПиУ против порога «Предпосылок» (строки 30–31). Сверх порога нужна постановка на учёт по НДС: модель считает без НДС, цены и налоги изменятся. МРП берётся текущий"),
+                    (14, "Лимит дохода упрощёнки", (
+                        f"=IF('{SHEET}'!{cells['tax_general']}=1,\"OK\","
+                        f"IF(COUNTIF({revenue_years},\">\"&({simplified_limit}))=0,\"OK\","
+                        f"\"Предупреждение: лет сверх лимита — \"&COUNTIF({revenue_years},\">\"&({simplified_limit}))))"
+                    ), "Годовой доход против лимита упрощёнки (строки 30 и 32). Сверх лимита — переход на общий режим"),
+                    (16, "Первоначальный запас оплачен один раз", (
+                        f"=IF(ABS(SUM('{CF}'!F{first_dds}:F{last_dds})"
+                        f"-(SUM('{CF}'!E{first_dds}:E{last_dds})+'{CF}'!P{last_dds})"
+                        f"*(1+IF('{SHEET}'!{cells['vat_on']}=1,'{SHEET}'!{cells['vat_rate']},0)))<1,\"OK\",\"Ошибка\")"
+                    ), "Запас из структуры финансирования — закупка, не денежный резерв: оплаты поставщикам = закупки под продажи + остаток запаса на конец, без двойного учёта"),
+                    (15, "Производственный персонал", (
+                        f"=IF(AND(SUM({revenue_years})>0,ABS(SUM({prod_fot}))<1,ABS(SUM({admin_fot}))>=1),\"Предупреждение\",\"OK\")"
+                    ), "ОПиУ: выручка есть, ФОТ производства 0, весь ФОТ в АУП — валовая маржа завышена. Если сотрудник делает продукт или услугу, отметьте его производственным в анкете"),
                 )
                 for offset, label, status, detail in audit_rows:
                     line = audit + 1 + offset

@@ -115,6 +115,15 @@ class AssetRow(BaseModel):
         return _month_or_blank(value, "Дата оплаты или ввода актива должна быть месяцем")
 
 
+class InventoryRow(BaseModel):
+    """Первоначальный товарный запас: оборотный капитал, без амортизации."""
+
+    name: str = Field(default="", max_length=255)
+    count: Num = 0
+    price_one: Num = 0
+    price: Num = 0
+
+
 class VariableCostIn(BaseModel):
     product: str = Field(default="", max_length=255)
     cost_type: str = Field(default="", max_length=255)
@@ -148,12 +157,19 @@ class SalaryRow(BaseModel):
     count: Num = 0
     salary: Num = 0
     percent: Num = 0
-    industrial: int = Field(default=0, ge=0, le=1)
+    # 1 — производственный (ФОТ в себестоимости), 0 — административный. Пусто — тип не выбран.
+    industrial: int | None = Field(default=None, ge=0, le=1)
     opv_exempt: bool = False
     so_exempt: bool = False
     opvr_exempt: bool = False
     osms_exempt: bool = False
+    vosms_exempt: bool = False
     services: list[Text] = Field(default_factory=list, max_length=30)
+
+    @field_validator("industrial", mode="before")
+    @classmethod
+    def blank_kind(cls, value):
+        return None if value in ("", None) else value
 
 
 class Amounts(BaseModel):
@@ -197,6 +213,10 @@ class ProjectFormIn(BaseModel):
     tax_simplified_rate: Num = 0
     tax_cit_rate: Num = 0
     vat_rate: Num = 0
+    opv_rate: Num = 0
+    so_rate: Num = 0
+    opvr_rate: Num = 0
+    osms_rate: Num = 0
     vosms_rate: Num = 0
     social_tax_rate: Num = 0
     currency: str = Field(pattern=r"^(kzt|usd|eur)$")
@@ -226,6 +246,8 @@ class ProjectFormIn(BaseModel):
 
     sales_start: str = Month
     planned_volume: str = Month
+    # Загрузка в месяц начала продаж, %. Дальше линейный рост до 100% к planned_volume.
+    sales_start_load: Num = 50
     volume_sales: list[VolumeSaleIn] = Field(min_length=1, max_length=100)
     planned_capacity: dict[str, Num] = Field(default_factory=dict)
     other_income: Num = 0
@@ -235,10 +257,13 @@ class ProjectFormIn(BaseModel):
     premises: list[AssetRow] = Field(default_factory=list, max_length=30)
     smr: list[AssetRow] = Field(default_factory=list, max_length=30)
     overhaul: list[AssetRow] = Field(default_factory=list, max_length=30)
+    inventory: list[InventoryRow] = Field(default_factory=list, max_length=30)
 
     cost_mode: str = Field(pattern=r"^(unit|monthly)$")
     variable_costs: list[VariableCostIn] = Field(default_factory=list, max_length=30)
     variable_other: list[ExpenseRow] = Field(default_factory=list, max_length=30)
+    # Пользователь осознанно подтвердил, что переменной себестоимости нет при продажах > 0.
+    zero_cogs_confirmed: bool = False
     salary: list[SalaryRow] = Field(default_factory=list, max_length=30)
     admin_expenses: list[ExpenseRow] = Field(default_factory=list, max_length=40)
     marketing_expenses: list[ExpenseRow] = Field(default_factory=list, max_length=30)
@@ -290,6 +315,13 @@ class ProjectFormIn(BaseModel):
             raise ValueError("Дата «Выход на 100%» должна входить в период планирования")
         if self.planned_volume < self.sales_start:
             raise ValueError("Дата «Выход на 100%» не может быть раньше начала продаж")
+        if self.sales_start_load < 0 or self.sales_start_load > 100:
+            raise ValueError("Загрузка в первый месяц продаж — от 0% до 100%")
+        if self.sales_start == self.planned_volume:
+            self.sales_start_load = 100
+        for row in self.salary:
+            if row.name.strip() and row.industrial is None:
+                raise ValueError(f"Выберите тип персонала для «{row.name.strip()}»: производственный или административный")
         if any(row.count <= 0 for row in self.volume_sales):
             raise ValueError("Укажите планируемое количество продаж")
         for row in self.volume_sales:
@@ -392,20 +424,146 @@ class ProjectFormIn(BaseModel):
                     missing.append("срок службы")
                 if missing:
                     raise ValueError(f"Для «{title}» ({label}) укажите: {', '.join(missing)}")
-        targets = {
-            "smr": sum(row.price for row in self.smr if row.name.strip()),
-            "overhaul": sum(row.price for row in self.overhaul if row.name.strip()),
-            "ready_premises": sum(row.price for row in self.premises if row.name.strip()),
-            "equipment": sum(row.price for row in self.equipment if row.name.strip()),
-        }
-        for key, target in targets.items():
-            own = getattr(self.own, key) if self.own_invest else 0
-            distributed = own + getattr(self.attracted, key)
-            if target and round(distributed) != round(target):
-                raise ValueError(
-                    f"Распределите сумму «{CAPEX_LABELS[key]}»: собственные и привлекаемые вместе должны равняться {round(target)}"
-                )
+        for row in self.inventory:
+            if not row.name.strip():
+                continue
+            title = row.name.strip()
+            missing = []
+            if row.count <= 0:
+                missing.append("количество")
+            amount = row.price or row.price_one * row.count
+            if amount <= 0:
+                missing.append("стоимость")
+            if missing:
+                raise ValueError(f"Для «{title}» (товарный запас) укажите: {', '.join(missing)}")
+        # already_owned — уже на балансе: в новую потребность финансирования не входит.
+        # Подтягиваем own/attracted/credit под целевые суммы покупки (старые анкеты могли включать already_owned).
+        self._sync_capex_financing()
         return self
+
+    def _sync_capex_financing(self) -> None:
+        targets = capex_purchase_targets(
+            equipment=self.equipment,
+            premises=self.premises,
+            smr=self.smr,
+            overhaul=self.overhaul,
+        )
+        use_own = int(self.own_invest or 0) == 1
+        for key, target in targets.items():
+            own = float(getattr(self.own, key) or 0) if use_own else 0.0
+            if not use_own:
+                setattr(self.own, key, 0)
+            if round(own) > round(target):
+                own = float(target)
+                setattr(self.own, key, own)
+            attracted = max(0.0, float(target) - float(own))
+            setattr(self.attracted, key, attracted)
+            if int(self.financing or 0) == 4:
+                credit = float(getattr(self.credit, key) or 0)
+                if round(credit) > round(attracted):
+                    setattr(self.credit, key, attracted)
+
+
+def _amount(value) -> float:
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def zero_cogs_state(form: dict) -> dict:
+    """Продажи > 0, а переменной себестоимости нет ни на единицу, ни по графику. Без привязки к отрасли."""
+    selling = []
+    for row in form.get("volume_sales") or []:
+        name = str(row.get("name") or "").strip()
+        if name and _amount(row.get("count")) > 0 and _amount(row.get("price")) > 0:
+            selling.append(name)
+    unit_costs: dict[str, float] = {}
+    for row in form.get("variable_costs") or []:
+        product = str(row.get("product") or "").strip()
+        if product:
+            unit_costs[product] = unit_costs.get(product, 0.0) + _amount(row.get("price"))
+    periodic = sum(_amount(row.get("value")) for row in form.get("variable_other") or [])
+    unit_total = sum(unit_costs.get(name, 0.0) for name in selling)
+    zero = bool(selling) and unit_total <= 0 and periodic <= 0
+    return {
+        "has_sales": bool(selling),
+        "zero": zero,
+        "confirmed": bool(form.get("zero_cogs_confirmed")),
+        "products_without_cost": [name for name in selling if unit_costs.get(name, 0.0) <= 0],
+    }
+
+
+ZERO_COGS_MESSAGE = (
+    "Себестоимость равна нулю при продажах больше нуля: вся выручка станет валовой прибылью. "
+    "Добавьте переменные затраты на шаге 3 или подтвердите, что их действительно нет"
+)
+
+
+def _capex_row_purchase(row) -> float:
+    """Сумма к новой покупке: already_owned = 0."""
+    if isinstance(row, dict):
+        if row.get("already_owned"):
+            return 0.0
+        if not str(row.get("name") or "").strip():
+            return 0.0
+        return float(row.get("price") or 0)
+    if getattr(row, "already_owned", False):
+        return 0.0
+    if not str(getattr(row, "name", "") or "").strip():
+        return 0.0
+    return float(getattr(row, "price", 0) or 0)
+
+
+def capex_purchase_targets(
+    *,
+    equipment=(),
+    premises=(),
+    smr=(),
+    overhaul=(),
+) -> dict[str, float]:
+    """Потребность CAPEX без уже купленных активов."""
+    return {
+        "smr": sum(_capex_row_purchase(row) for row in smr or ()),
+        "overhaul": sum(_capex_row_purchase(row) for row in overhaul or ()),
+        "ready_premises": sum(_capex_row_purchase(row) for row in premises or ()),
+        "equipment": sum(_capex_row_purchase(row) for row in equipment or ()),
+    }
+
+
+def normalize_capex_financing(form: dict) -> dict:
+    """Копия формы: own/attracted/credit по CAPEX без already_owned в потребности."""
+    import copy
+
+    data = copy.deepcopy(form or {})
+    targets = capex_purchase_targets(
+        equipment=data.get("equipment") or [],
+        premises=data.get("premises") or [],
+        smr=data.get("smr") or [],
+        overhaul=data.get("overhaul") or [],
+    )
+    own = dict(data.get("own") or {})
+    attracted = dict(data.get("attracted") or {})
+    credit = dict(data.get("credit") or {})
+    use_own = data.get("own_invest") in (True, 1, "1", "true", "True")
+    financing = int(data.get("financing") or 1)
+    for key, target in targets.items():
+        own_value = float(own.get(key) or 0) if use_own else 0.0
+        if not use_own:
+            own_value = 0.0
+        if round(own_value) > round(target):
+            own_value = float(target)
+        attracted_value = max(0.0, float(target) - own_value)
+        own[key] = own_value
+        attracted[key] = attracted_value
+        if financing == 4:
+            credit_value = float(credit.get(key) or 0)
+            if round(credit_value) > round(attracted_value):
+                credit[key] = attracted_value
+    data["own"] = own
+    data["attracted"] = attracted
+    data["credit"] = credit
+    return data
 
 
 def months_between(start: str, end: str) -> int:
@@ -489,11 +647,22 @@ def _period(value: int) -> str:
     return "monthly"
 
 
+# Типовой срок, лет, если в строке не указан (помещения дольше оборудования).
+_DEFAULT_LIFE_YEARS = {
+    "Здания и помещения": 25,
+    "Оборудование": 7,
+    "СМР": 10,
+    "Материалы": 5,
+}
+
+
 def _assets(rows: list[AssetRow], category: str) -> list[AssetIn]:
     result = []
+    fallback_years = _DEFAULT_LIFE_YEARS.get(category, 5)
     for row in rows:
         if not row.name.strip():
             continue
+        years = int(row.life_years) if row.life_years else fallback_years
         result.append(
             AssetIn(
                 name=row.name.strip(),
@@ -501,7 +670,7 @@ def _assets(rows: list[AssetRow], category: str) -> list[AssetIn]:
                 cost=row.price or row.price_one * row.count,
                 quantity=row.count or 1,
                 purchase_date=f"{row.year:04d}-01" if row.year >= 1900 else "",
-                life_months=row.life_years * 12 if row.life_years else 60,
+                life_months=max(0, years) * 12,
             )
         )
     return result

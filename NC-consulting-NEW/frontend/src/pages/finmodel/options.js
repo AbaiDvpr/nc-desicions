@@ -122,7 +122,7 @@ export const INVEST_FIELDS = [
   ['overhaul', 'Перечень материалов при СМР, капитальном ремонте'],
   ['ready_premises', 'Помещения, здания, сооружения'],
   ['equipment', 'Приобретение оборудования, техники, мебели'],
-  ['raw', 'Закуп сырья, товаров, расходных материалов'],
+  ['raw', 'Первоначальный запас сырья и товаров'],
   ['advertising', 'Расходы на рекламу'],
   ['wages', 'Расходы по выплате заработной платы'],
   ['rental', 'Расходы по аренде'],
@@ -169,7 +169,22 @@ export const newVolume = () => ({
   planned_capacity: {},
 })
 
-/** Новая строка актива. Дефолты года/дат — с начала проекта (planning_from), срок службы не заполняем. */
+/** Типовой срок амортизации по категории. На строке можно менять. */
+export const DEFAULT_LIFE_YEARS = {
+  premises: 25,
+  equipment: 7,
+  smr: 10,
+  overhaul: 5,
+}
+
+export const LIFE_YEAR_HINTS = {
+  premises: 'Помещения обычно 20–25 лет',
+  equipment: 'Оборудование обычно 5–7 лет',
+  smr: 'СМР / капремонт обычно 5–10 лет',
+  overhaul: 'Материалы ремонта обычно 5–10 лет',
+}
+
+/** Новая строка актива. Год/даты — со старта проекта; срок — по категории (помещения 25, оборудование 7…). */
 export const newAsset = (defaults = {}) => {
   const startMonth = String(defaults.start || defaults.pay_month || '').slice(0, 7)
   const year = defaults.year != null && defaults.year !== ''
@@ -177,19 +192,35 @@ export const newAsset = (defaults = {}) => {
     : startMonth
       ? startMonth.slice(0, 4)
       : ''
+  const category = defaults.category || ''
+  const lifeDefault = DEFAULT_LIFE_YEARS[category]
+  const life =
+    defaults.life_years != null && defaults.life_years !== ''
+      ? defaults.life_years
+      : lifeDefault != null
+        ? String(lifeDefault)
+        : ''
   return {
     name: '',
     count: '1',
     price_one: '',
     price: '',
     year,
-    life_years: '',
+    life_years: life,
     pay_month: startMonth,
     commission_month: startMonth,
     already_owned: false,
     book_value: '',
   }
 }
+
+/** Первоначальный товарный запас: без амортизации, в ДДС через U34. */
+export const newInventory = () => ({
+  name: '',
+  count: '1',
+  price_one: '',
+  price: '',
+})
 
 export const newVariableCost = () => ({ product: '', cost_type: '', price: '' })
 
@@ -224,11 +255,12 @@ export const newSalary = () => ({
   count: '1',
   salary: '',
   percent: '',
-  industrial: 0,
+  industrial: '',
   opv_exempt: false,
   so_exempt: false,
   opvr_exempt: false,
   osms_exempt: false,
+  vosms_exempt: false,
   services: [],
 })
 
@@ -241,6 +273,10 @@ export function initialForm() {
     tax_simplified_rate: '',
     tax_cit_rate: '',
     vat_rate: '',
+    opv_rate: '',
+    so_rate: '',
+    opvr_rate: '',
+    osms_rate: '',
     vosms_rate: '',
     social_tax_rate: '',
     currency: '',
@@ -269,6 +305,7 @@ export function initialForm() {
 
     sales_start: '',
     planned_volume: '',
+    sales_start_load: 50,
     volume_sales: [newVolume()],
     planned_capacity: {},
     other_income: '',
@@ -278,10 +315,12 @@ export function initialForm() {
     premises: [],
     smr: [],
     overhaul: [],
+    inventory: [],
 
     cost_mode: 'unit',
     variable_costs: [],
     variable_other: [],
+    zero_cogs_confirmed: false,
     salary: [],
     admin_expenses: ADMIN_PRESETS.map(([name, type]) => newExpense(name, type)),
     marketing_expenses: MARKETING_PRESETS.map((name) => newExpense(name)),

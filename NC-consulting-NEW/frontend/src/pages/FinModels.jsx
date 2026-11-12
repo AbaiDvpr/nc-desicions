@@ -4,6 +4,7 @@ import { api, finModelFiles } from '../api.js'
 import BpDocument from '../components/BpDocument.jsx'
 import BpEmpty from '../components/BpEmpty.jsx'
 import BpTasks from '../components/BpTasks.jsx'
+import AuditDownload from '../components/AuditDownload.jsx'
 import ExcelDownloads from '../components/ExcelDownloads.jsx'
 import { WordIcon } from '../components/FileIcons.jsx'
 
@@ -359,6 +360,7 @@ function ModelCard({ model, archived, busy, onArchive, onRestore }) {
               Бизнес-план
             </button>
             <ExcelDownloads id={model.id} small />
+            <AuditDownload id={model.id} small />
             <div className="model-card__icons">
               <Link
                 to={`/cabinet/models/${model.id}`}

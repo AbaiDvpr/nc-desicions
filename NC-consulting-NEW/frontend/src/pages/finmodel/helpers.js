@@ -32,6 +32,31 @@ export function averageMonthlyRevenue(form) {
   }, 0)
 }
 
+/** Выход на 100% в месяц старта продаж: разгона нет, загрузка первого месяца — 100%. */
+export function fullLoadAtStart(form) {
+  const start = String(form.sales_start || '').slice(0, 7)
+  const full = String(form.planned_volume || '').slice(0, 7)
+  return start.length === 7 && start === full
+}
+
+/** Продажи > 0, а себестоимости нет ни на единицу, ни по графику. Правило общее для любой отрасли. */
+export function zeroCogsState(form) {
+  const selling = (form.volume_sales || [])
+    .filter((row) => String(row.name || '').trim() && num(row.count) > 0 && num(row.price) > 0)
+    .map((row) => String(row.name).trim())
+  const unit = {}
+  for (const row of form.variable_costs || []) {
+    const name = String(row.product || '').trim()
+    if (name) unit[name] = (unit[name] || 0) + num(row.price)
+  }
+  const periodic = (form.variable_other || []).reduce((sum, row) => sum + num(row.value), 0)
+  const unitTotal = selling.reduce((sum, name) => sum + (unit[name] || 0), 0)
+  return {
+    zero: selling.length > 0 && unitTotal <= 0 && periodic <= 0,
+    withoutCost: selling.filter((name) => !(unit[name] > 0)),
+  }
+}
+
 export function averageMonthlyCogs(form) {
   const monthly = Number(form.time_param) !== 1
   const unit = {}
@@ -208,27 +233,58 @@ export function listTotal(rows) {
   return named(rows).reduce((sum, row) => sum + num(row.price), 0)
 }
 
+/** CAPEX к новой покупке: уже купленное (already_owned) в потребность финансирования не входит. */
+export function capexPurchaseTotal(rows) {
+  return named(rows).reduce((sum, row) => (row.already_owned ? sum : sum + num(row.price)), 0)
+}
+
+/** Сумма первоначального товарного запаса из списка на шаге «Продажи». */
+export function inventoryTotal(form) {
+  return listTotal(form.inventory)
+}
+
 export function capexTargets(form) {
   return {
-    smr: listTotal(form.smr),
-    overhaul: listTotal(form.overhaul),
-    ready_premises: listTotal(form.premises),
-    equipment: listTotal(form.equipment),
+    smr: capexPurchaseTotal(form.smr),
+    overhaul: capexPurchaseTotal(form.overhaul),
+    ready_premises: capexPurchaseTotal(form.premises),
+    equipment: capexPurchaseTotal(form.equipment),
   }
 }
 
+/** Сумма строки расхода: value или площадь × ставка для земельного налога. */
+export function expenseAmount(row) {
+  const value = num(row?.value)
+  if (value > 0) return value
+  return num(row?.land_area) * num(row?.land_rate)
+}
+
+/**
+ * Сколько заложить в инвестиции на `months` мес. запуска.
+ * period 0 — разово; 1 — каждый месяц; 12 — раз в год (за 1–12 мес. = одна годовая сумма, не × месяцев).
+ */
+export function expenseLaunchTotal(row, months) {
+  const value = expenseAmount(row)
+  const window = Math.max(0, num(months))
+  if (!(value > 0) || window <= 0) return 0
+  const period = row?.period === '' || row?.period == null ? 1 : Number(row.period)
+  if (!Number.isFinite(period) || period <= 0) return value
+  const payments = Math.floor((window - 1) / period) + 1
+  return value * Math.max(0, payments)
+}
+
+function sumExpenseLaunch(rows, months) {
+  return (rows || []).reduce((sum, row) => sum + expenseLaunchTotal(row, months), 0)
+}
+
 export function operatingMonthly(form) {
-  // raw — средняя себестоимость в месяц (сезонные не суммируются как «каждый месяц»).
-  const raw = averageMonthlyCogs(form)
+  // Если заполнен список «Товарный запас» — это сумма первоначального запаса (без амортизации).
+  // Иначе — средняя себестоимость в месяц × months_raw на шаге инвестиций.
+  // advertising/rental/other считаются в panelRows с учётом period (год ≠ месяц).
+  const stock = inventoryTotal(form)
+  const raw = stock > 0 ? stock : averageMonthlyCogs(form)
   const wages = form.salary.reduce((sum, row) => sum + num(row.salary) * num(row.count), 0)
-  const advertising = form.marketing_expenses.reduce((sum, row) => sum + num(row.value), 0)
-  const rental = form.admin_expenses
-    .filter((row) => Number(row.type_expense) === 2)
-    .reduce((sum, row) => sum + num(row.value), 0)
-  const other = form.admin_expenses
-    .filter((row) => Number(row.type_expense) !== 2)
-    .reduce((sum, row) => sum + num(row.value), 0)
-  return { raw, wages, advertising, rental, other }
+  return { raw, wages, advertising: 0, rental: 0, other: 0 }
 }
 
 export function distributed(form, key) {
@@ -317,13 +373,20 @@ function stepIssue(form, index) {
     if (regime === 1 && Number(form.nds) === 1 && !filled(form.vat_rate) && form.vat_rate !== 0) {
       return { message: 'Укажите ставку НДС', anchor: '', field: 'vat_rate' }
     }
-    if (!filled(form.vosms_rate) && form.vosms_rate !== 0) {
-      return { message: 'Укажите ставку ВОСМС', anchor: '', field: 'vosms_rate' }
-    }
     if (Number(form.legal_form) === 2 && regime === 1 && !filled(form.social_tax_rate) && form.social_tax_rate !== 0) {
       return { message: 'Укажите ставку социального налога', anchor: '', field: 'social_tax_rate' }
     }
-    for (const key of ['tax_simplified_rate', 'tax_cit_rate', 'vat_rate', 'vosms_rate', 'social_tax_rate']) {
+    for (const key of [
+      'tax_simplified_rate',
+      'tax_cit_rate',
+      'vat_rate',
+      'opv_rate',
+      'so_rate',
+      'opvr_rate',
+      'osms_rate',
+      'vosms_rate',
+      'social_tax_rate',
+    ]) {
       if (filled(form[key]) && num(form[key]) > 100) {
         return { message: 'Ставка не больше 100%', anchor: '', field: key }
       }
@@ -397,6 +460,20 @@ function stepIssue(form, index) {
         field: 'planned_volume',
       }
     }
+    if (!fullLoadAtStart(form) && !filled(form.sales_start_load) && form.sales_start_load !== 0) {
+      return {
+        message: 'Укажите загрузку в первый месяц продаж',
+        anchor: 'dates',
+        field: 'sales_start_load',
+      }
+    }
+    if (num(form.sales_start_load) < 0 || num(form.sales_start_load) > 100) {
+      return {
+        message: 'Загрузка в первый месяц продаж — от 0% до 100%',
+        anchor: 'dates',
+        field: 'sales_start_load',
+      }
+    }
     const products = form.volume_sales || []
     if (products.length === 0) {
       return { message: 'Добавьте хотя бы одну продукцию', anchor: 'products', field: '' }
@@ -449,6 +526,13 @@ function stepIssue(form, index) {
         (!filled(row.product) || !filled(row.cost_type) || (!filled(row.price) && row.price !== 0)),
     )
     if (brokenCost) return { message: 'Заполните себестоимость на единицу: продукт, тип и цену', anchor: 'cogs', field: '' }
+    if (zeroCogsState(form).zero && !form.zero_cogs_confirmed) {
+      return {
+        message: 'Себестоимость равна нулю при продажах. Добавьте переменные затраты или подтвердите, что их нет',
+        anchor: 'cogs',
+        field: '',
+      }
+    }
     // Пустые строки не блокируют (как себестоимость). Начатая строка — должность, кол-во и оклад > 0.
     for (const row of form.salary || []) {
       const started =
@@ -467,6 +551,13 @@ function stepIssue(form, index) {
       if (!positive(row.salary)) {
         return {
           message: `Укажите оклад для «${String(row.name).trim()}» (больше 0)`,
+          anchor: 'salary',
+          field: '',
+        }
+      }
+      if (![0, 1].includes(Number(row.industrial)) || row.industrial === '' || row.industrial == null) {
+        return {
+          message: `Выберите тип персонала для «${String(row.name).trim()}»: производственный или административный`,
           anchor: 'salary',
           field: '',
         }
@@ -550,6 +641,25 @@ function assetsIssue(form) {
             assetTab: key,
           }
         }
+      }
+    }
+  }
+  const inventoryRows = form.inventory || []
+  for (let index = 0; index < inventoryRows.length; index += 1) {
+    const row = inventoryRows[index]
+    const title = String(row.name || '').trim()
+    const missing = []
+    if (!title) missing.push('название')
+    if (!positive(row.count)) missing.push('количество')
+    const hasPrice = positive(row.price) || (positive(row.price_one) && positive(row.count))
+    if (!hasPrice) missing.push('стоимость')
+    if (missing.length) {
+      const who = title ? `«${title}»` : `строку ${index + 1}`
+      return {
+        message: `Вы забыли заполнить товарный запас: для ${who} укажите ${missing.join(', ')}`,
+        anchor: 'assets',
+        field: '',
+        assetTab: 'inventory',
       }
     }
   }
@@ -882,6 +992,7 @@ export function capexProblem(form) {
 export function panelRows(form) {
   const capex = capexTargets(form)
   const monthly = operatingMonthly(form)
+  const stockListed = inventoryTotal(form) > 0
   const multipliers = {
     raw: form.months_raw,
     wages: form.months_wages,
@@ -889,13 +1000,48 @@ export function panelRows(form) {
     rental: form.months_rental,
     other: form.months_other,
   }
+  const expenseRows = {
+    advertising: form.marketing_expenses || [],
+    rental: (form.admin_expenses || []).filter((row) => Number(row.type_expense) === 2),
+    other: (form.admin_expenses || []).filter((row) => Number(row.type_expense) !== 2),
+  }
   return INVEST_FIELDS.map(([key, label]) => {
     const operating = OPERATING_KEYS.includes(key)
-    const base = operating ? monthly[key] : capex[key]
     const rawMonths = multipliers[key]
-    const months = operating ? (rawMonths === '' || rawMonths === null || rawMonths === undefined ? 1 : Math.max(0, num(rawMonths))) : 1
-    return { key, label, operating, base, months, total: base * months, distributed: distributed(form, key) }
-  }).filter((row) => row.base > 0)
+    // Список товарного запаса — разовая сумма в оборотный капитал (U34), без × месяцев.
+    const months =
+      key === 'raw' && stockListed
+        ? 1
+        : operating
+          ? rawMonths === '' || rawMonths === null || rawMonths === undefined
+            ? 1
+            : Math.max(0, num(rawMonths))
+          : 1
+    let total
+    let base
+    if (key === 'advertising' || key === 'rental' || key === 'other') {
+      // Учитывает period: «раз в год» за 2 мес. запуска = одна годовая сумма, не × 2.
+      total = sumExpenseLaunch(expenseRows[key], months)
+      base = months > 0 ? total / months : total
+    } else if (operating) {
+      base = monthly[key]
+      total = base * months
+    } else {
+      base = capex[key]
+      total = base
+    }
+    return {
+      key,
+      label,
+      operating,
+      base,
+      months,
+      total,
+      distributed: distributed(form, key),
+      stockListed: key === 'raw' && stockListed,
+      periodAware: key === 'advertising' || key === 'rental' || key === 'other',
+    }
+  }).filter((row) => row.total > 0)
 }
 
 const CAPEX_DETAIL_SOURCE = {
@@ -939,16 +1085,17 @@ function onlyPositiveDetails(lines) {
 /** Строки-источники для drawer «Детали» на шаге инвестиций. */
 export function investDetailLines(form, key) {
   if (CAPEX_DETAIL_SOURCE[key]) {
-    return onlyPositiveDetails(
-      named(form[CAPEX_DETAIL_SOURCE[key]] || []).map((row) => {
+    return named(form[CAPEX_DETAIL_SOURCE[key]] || [])
+      .map((row) => {
         const bits = []
         if (num(row.count)) bits.push(`${numberFormat.format(num(row.count))} шт`)
         if (num(row.price_one)) bits.push(`${numberFormat.format(num(row.price_one))} за ед.`)
-        if (row.already_owned) bits.push('уже куплен')
+        if (row.already_owned) bits.push('уже куплен · не в новой потребности')
         if (filled(row.life_years) || row.life_years === 0) bits.push(`срок ${num(row.life_years)} лет`)
-        return detailLine(row.name, row.price, bits.join(' · '))
-      }),
-    )
+        // already_owned: актив на балансе, в инвестиции/ДДС оплату не кладём.
+        return detailLine(row.name, row.already_owned ? 0 : row.price, bits.join(' · '))
+      })
+      .filter((line) => num(line.amount) > 0 || String(line.note).includes('уже куплен'))
   }
   if (key === 'wages') {
     return onlyPositiveDetails(
@@ -963,30 +1110,20 @@ export function investDetailLines(form, key) {
         ),
     )
   }
-  if (key === 'advertising') {
+  if (key === 'advertising' || key === 'rental' || key === 'other') {
+    const monthsKey = `months_${key}`
+    const months =
+      form[monthsKey] === '' || form[monthsKey] == null ? 1 : Math.max(0, num(form[monthsKey]))
+    const rows =
+      key === 'advertising'
+        ? form.marketing_expenses || []
+        : key === 'rental'
+          ? (form.admin_expenses || []).filter((row) => Number(row.type_expense) === 2)
+          : (form.admin_expenses || []).filter((row) => Number(row.type_expense) !== 2)
+    const fallback = key === 'advertising' ? 'Реклама' : key === 'rental' ? 'Аренда' : 'Прочий расход'
     return onlyPositiveDetails(
-      (form.marketing_expenses || [])
-        .filter((row) => String(row.name || '').trim() || num(row.value) > 0)
-        .map((row) =>
-          detailLine(expenseDetailTitle(row, 'Реклама'), row.value, Number(row.period) === 12 ? 'в год' : 'в месяц'),
-        ),
-    )
-  }
-  if (key === 'rental') {
-    return onlyPositiveDetails(
-      (form.admin_expenses || [])
-        .filter((row) => Number(row.type_expense) === 2)
-        .filter((row) => String(row.name || '').trim() || num(row.value) > 0)
-        .map((row) =>
-          detailLine(expenseDetailTitle(row, 'Аренда'), row.value, Number(row.period) === 12 ? 'в год' : 'в месяц'),
-        ),
-    )
-  }
-  if (key === 'other') {
-    return onlyPositiveDetails(
-      (form.admin_expenses || [])
-        .filter((row) => Number(row.type_expense) !== 2)
-        .filter((row) => num(row.value) > 0 || (isLandExpense(row) && num(row.land_area) * num(row.land_rate) > 0))
+      rows
+        .filter((row) => expenseAmount(row) > 0 || String(row.name || '').trim())
         .map((row) => {
           const bits = []
           const land = isLandExpense(row)
@@ -995,14 +1132,32 @@ export function investDetailLines(form, key) {
             if (num(row.land_area)) bits.push(`${numberFormat.format(num(row.land_area))} ${unit}`)
             if (num(row.land_rate)) bits.push(`${numberFormat.format(num(row.land_rate))} ₸/${unit}`)
           }
-          if (Number(row.period) === 12) bits.push('в год')
-          else if (Number(row.period) === 1) bits.push('в месяц')
-          const amount = num(row.value) > 0 ? row.value : num(row.land_area) * num(row.land_rate)
-          return detailLine(expenseDetailTitle(row, land ? 'Земельный налог' : 'Прочий расход'), amount, bits.join(' · '))
+          const period = row.period === '' || row.period == null ? 1 : Number(row.period)
+          if (period <= 0) bits.push('разово')
+          else if (period === 1) bits.push('в месяц')
+          else if (period === 12) bits.push('в год')
+          else bits.push(`каждые ${period} мес.`)
+          const launch = expenseLaunchTotal(row, months)
+          if (period === 12 && months > 0 && months <= 12) bits.push('в инвестиции — один платёж')
+          return detailLine(
+            expenseDetailTitle(row, land && key === 'other' ? 'Земельный налог' : fallback),
+            launch,
+            bits.join(' · '),
+          )
         }),
     )
   }
   if (key === 'raw') {
+    const stock = onlyPositiveDetails(
+      named(form.inventory || []).map((row) => {
+        const bits = []
+        if (num(row.count)) bits.push(`${numberFormat.format(num(row.count))} шт`)
+        if (num(row.price_one)) bits.push(`${numberFormat.format(num(row.price_one))} за ед.`)
+        bits.push('без амортизации · ДДС U34')
+        return detailLine(row.name, row.price, bits.join(' · '))
+      }),
+    )
+    if (stock.length) return stock
     if (form.cost_mode !== 'unit') {
       return onlyPositiveDetails(
         (form.variable_other || [])
@@ -1071,6 +1226,7 @@ export function toPayload(form) {
     planning_to: monthOf(planningTo),
     sales_start: monthOf(form.sales_start),
     planned_volume: monthOf(form.planned_volume),
+    sales_start_load: fullLoadAtStart(form) ? 100 : form.sales_start_load,
     volume_sales: form.volume_sales
       .filter((row) => String(row.name || '').trim())
       .map((row) => ({
@@ -1085,8 +1241,10 @@ export function toPayload(form) {
     premises: named(form.premises),
     smr: named(form.smr),
     overhaul: named(form.overhaul),
+    inventory: named(form.inventory),
     variable_costs: form.variable_costs.filter((row) => row.product || row.cost_type || row.price !== ''),
     variable_other: named(form.variable_other),
+    zero_cogs_confirmed: zeroCogsState(form).zero && Boolean(form.zero_cogs_confirmed),
     salary: named(form.salary),
     admin_expenses: named(form.admin_expenses).map((row) => normalizeLandExpense(row)),
     marketing_expenses: named(form.marketing_expenses),

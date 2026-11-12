@@ -107,4 +107,5 @@ export const finModelFiles = (id) => ({
   word: `/api/fin-models/${id}/report.docx`,
   pdf: `/api/fin-models/${id}/report.pdf`,
   excel: `/api/fin-models/${id}/fem-v5.xlsx`,
+  audit: `/api/fin-models/${id}/audit.json?steps=1,2,3,4`,
 })

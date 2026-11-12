@@ -31,6 +31,8 @@ import {
   suggestedSubsidyTerm,
   syncGovLoanRates,
   yearsBetween,
+  fullLoadAtStart,
+  zeroCogsState,
 } from './helpers.js'
 import {
   CURRENCY_SIGNS,
@@ -43,6 +45,9 @@ import {
   UNITS,
   YES_NO,
   newAsset,
+  newInventory,
+  DEFAULT_LIFE_YEARS,
+  LIFE_YEAR_HINTS,
   isLandTaxName,
   isLandTaxRow,
   LAND_AREA_UNITS,
@@ -65,8 +70,16 @@ function RemoveButton({ onClick }) {
 function ProductList({ items, onChange, sign, monthly, years, dateMin, dateMax }) {
   const patch = (index, partial) => onChange(items.map((item, i) => (i === index ? { ...item, ...partial } : item)))
   const hasSeasonal = items.some((item) => item.seasonal && (item.months || []).length)
-  const turnover = averageMonthlyRevenue({ volume_sales: items, time_param: monthly ? 3 : 1 })
+  // Сумма в тех же единицах, что и поле объёма: помесячно → месяц, по годам → год.
+  // Раньше averageMonthlyRevenue всегда давал месяц, а подпись при time_param=год была «за год».
+  const turnover = hasSeasonal
+    ? averageMonthlyRevenue({ volume_sales: items, time_param: monthly ? 3 : 1 })
+    : items.reduce((sum, row) => {
+        if (!String(row.name || '').trim()) return sum
+        return sum + num(row.count) * num(row.price)
+      }, 0)
   const period = hasSeasonal ? 'в месяц в среднем' : monthly ? 'в месяц' : 'за год'
+  const linePeriod = monthly ? 'в месяц' : 'за год'
 
   return (
     <div className="sales-list">
@@ -103,7 +116,7 @@ function ProductList({ items, onChange, sign, monthly, years, dateMin, dateMax }
             </div>
           </div>
           <div className="sales-line__total">
-            Итого при 100%: <strong>{formatMoney(num(item.count) * num(item.price), sign)}</strong>
+            Итого при 100%: <strong>{formatMoney(num(item.count) * num(item.price), sign)}</strong> {linePeriod}
           </div>
           <details className="sales-more">
             <summary>Сезон, дата и своя загрузка</summary>
@@ -173,11 +186,15 @@ function ProductList({ items, onChange, sign, monthly, years, dateMin, dateMax }
   )
 }
 
-function AssetCards({ items, onChange, sign, projectStart }) {
+function AssetCards({ items, onChange, sign, projectStart, category = 'equipment' }) {
   const patch = (index, partial) => onChange(items.map((item, i) => (i === index ? { ...item, ...partial } : item)))
   const total = items.reduce((sum, item) => sum + num(item.price), 0)
   const startMonth = String(projectStart || '').slice(0, 7)
   const startYear = startMonth.slice(0, 4)
+  const lifeHint = LIFE_YEAR_HINTS[category] || 'Срок амортизации по этой позиции'
+  const lifePlaceholder = String(DEFAULT_LIFE_YEARS[category] || 5)
+  const shortLifeOnPremises =
+    category === 'premises' && items.some((item) => String(item.name || '').trim() && num(item.life_years) > 0 && num(item.life_years) < 15)
 
   return (
     <div className="sales-list">
@@ -187,6 +204,11 @@ function AssetCards({ items, onChange, sign, projectStart }) {
         </p>
       )}
       {items.length === 0 && <div className="fm-list__empty">Пока пусто. Добавьте строку, если такие затраты есть.</div>}
+      {shortLifeOnPremises ? (
+        <p className="setup-warning">
+          У помещения срок меньше 15 лет — к концу прогноза оно почти обнулится, прибыль занизится. Для зданий обычно 20–25 лет.
+        </p>
+      ) : null}
       <ShowMore id="assets">
       {items.map((item, index) => (
         <article key={index} className="sales-card">
@@ -240,12 +262,12 @@ function AssetCards({ items, onChange, sign, projectStart }) {
                 onChange={(v) => patch(index, { year: v })}
               />
             </Field>
-            <Field label="Срок, лет" required hint="Амортизация; 0 — без капитализации">
+            <Field label="Срок, лет" required hint={`${lifeHint}. 0 — без капитализации`}>
               <NumberInput
                 required
                 integer
                 value={item.life_years}
-                placeholder="напр. 5"
+                placeholder={lifePlaceholder}
                 onChange={(v) => patch(index, { life_years: v })}
               />
             </Field>
@@ -326,7 +348,7 @@ function AssetCards({ items, onChange, sign, projectStart }) {
         type="button"
         className="btn btn--small fm-list__add"
         onClick={() => {
-          onChange([...items, newAsset({ start: startMonth })])
+          onChange([...items, newAsset({ start: startMonth, category })])
           window.dispatchEvent(new CustomEvent('fm-show-panel', { detail: 'assets' }))
         }}
       >
@@ -341,7 +363,86 @@ const ASSET_TABS = [
   ['premises', 'Недвижимость'],
   ['smr', 'Работы'],
   ['overhaul', 'Материалы'],
+  ['inventory', 'Товарный запас'],
 ]
+
+/** Первоначальный товарный запас: без амортизации, оплата один раз через ДДС U34. */
+function InventoryCards({ items, onChange, sign }) {
+  const patch = (index, partial) => onChange(items.map((item, i) => (i === index ? { ...item, ...partial } : item)))
+  const total = items.reduce((sum, item) => sum + num(item.price), 0)
+
+  return (
+    <div className="sales-list">
+      {items.length > 0 && (
+        <p className="sales-sum">
+          {items.length} {plural(items.length, 'позиция', 'позиции', 'позиций')} · <strong>{formatMoney(total, sign)}</strong>
+          {' · '}
+          без амортизации, в ДДС как первоначальный запас
+        </p>
+      )}
+      {items.length === 0 && (
+        <div className="fm-list__empty">
+          Первый закуп товара и сырья — сюда. Не в «Материалы»: там амортизация и повторная оплата в CAPEX.
+        </div>
+      )}
+      <ShowMore id="inventory">
+        {items.map((item, index) => (
+          <article key={index} className="sales-card sales-card--compact">
+            <div className="sales-line">
+              <Field label="Наименование">
+                <TextInput
+                  required
+                  value={item.name}
+                  placeholder="Товар / сырьё"
+                  onChange={(v) => patch(index, { name: v })}
+                />
+              </Field>
+              <Field label="Кол-во" required>
+                <NumberInput
+                  required
+                  integer
+                  value={item.count}
+                  placeholder="1"
+                  onChange={(v) => patch(index, { count: v, price: num(v) * num(item.price_one) })}
+                />
+              </Field>
+              <Field label="Цена за ед.">
+                <NumberInput
+                  value={item.price_one}
+                  suffix={sign}
+                  placeholder="0"
+                  onChange={(v) => patch(index, { price_one: v, price: num(item.count) * num(v) })}
+                />
+              </Field>
+              <Field label="Стоимость" required>
+                <NumberInput
+                  required
+                  value={item.price}
+                  suffix={sign}
+                  placeholder="0"
+                  onChange={(v) => patch(index, { price: v })}
+                />
+              </Field>
+              <div className="sales-line__end">
+                <RemoveButton onClick={() => onChange(items.filter((_, i) => i !== index))} />
+              </div>
+            </div>
+          </article>
+        ))}
+      </ShowMore>
+      <button
+        type="button"
+        className="btn btn--small fm-list__add"
+        onClick={() => {
+          onChange([...items, newInventory()])
+          window.dispatchEvent(new CustomEvent('fm-show-panel', { detail: 'assets' }))
+        }}
+      >
+        Добавить позицию запаса
+      </button>
+    </div>
+  )
+}
 
 const FINANCING_CHOICES = [
   [1, 'Инвестор'],
@@ -550,7 +651,20 @@ function ExpenseCards({ items, onChange, sign, withType, landMode = false, id = 
   )
 }
 
-function StaffCards({ items, onChange, sign, products }) {
+const STAFF_KINDS = [
+  [1, 'Производственный'],
+  [0, 'Административный'],
+]
+
+const STAFF_TAX_ROWS = [
+  { exempt: 'opv_exempt', rate: 'opv_rate', label: 'ОПВ работника не удерживается', fallback: 10 },
+  { exempt: 'vosms_exempt', rate: 'vosms_rate', label: 'ВОСМС работника не удерживается', fallback: 2 },
+  { exempt: 'so_exempt', rate: 'so_rate', label: 'СО не начисляется', fallback: 5 },
+  { exempt: 'opvr_exempt', rate: 'opvr_rate', label: 'ОПВР не начисляется', fallback: 3.5 },
+  { exempt: 'osms_exempt', rate: 'osms_rate', label: 'ООСМС не начисляется', fallback: 3 },
+]
+
+function StaffCards({ items, onChange, sign, form, set, rates }) {
   const patch = (index, partial) => onChange(items.map((item, i) => (i === index ? { ...item, ...partial } : item)))
   return (
     <div className="sales-list">
@@ -578,23 +692,49 @@ function StaffCards({ items, onChange, sign, products }) {
             </Field>
             <RemoveButton onClick={() => onChange(items.filter((_, i) => i !== index))} />
           </div>
+          <div className="staff-kind">
+            <Field
+              label="Тип персонала"
+              required
+              hint="Производственный — делает продукт или услугу, ФОТ идёт в себестоимость. Административный — управление и поддержка, ФОТ в общих расходах"
+            >
+              <Choice
+                value={item.industrial}
+                onChange={(v) => patch(index, { industrial: Number(v) })}
+                options={STAFF_KINDS}
+                pair
+                required
+              />
+            </Field>
+          </div>
           <details className="sales-more">
-            <summary>Налоги, запуск и привязка к продукции</summary>
+            <summary>Налоги и запуск</summary>
             <div className="sales-card__staff-extra">
-              <Toggle value={item.invest} onChange={(v) => patch(index, { invest: v })} label="С начала проекта (и до продаж)" />
-              <Toggle value={item.industrial} onChange={(v) => patch(index, { industrial: v ? 1 : 0 })} label="Производственный персонал" />
-              <Toggle value={Boolean(item.opv_exempt)} onChange={(v) => patch(index, { opv_exempt: v })} label="ОПВ работника не удерживается" />
-              <Toggle value={Boolean(item.so_exempt)} onChange={(v) => patch(index, { so_exempt: v })} label="СО не начисляется" />
-              <Toggle value={Boolean(item.opvr_exempt)} onChange={(v) => patch(index, { opvr_exempt: v })} label="ОПВР не начисляется" />
-              <Toggle value={Boolean(item.osms_exempt)} onChange={(v) => patch(index, { osms_exempt: v })} label="ООСМС не начисляется" />
-              <span className="fm-field__hint">Оклад — начисление до удержаний. ОПВ 10% и ВОСМС 2% удерживаются из зарплаты к выплате; СО, ОПВР, ООСМС и соцналог (ТОО на ОУР, 6% с 2026) — за счёт работодателя. Освобождение одной строки не отключает остальные.</span>
-            </div>
-            <div className="sales-card__season">
-              {products.length === 0 ? (
-                <span className="fm-field__hint">Сначала укажите продукцию на шаге 2, если процент считается от неё.</span>
-              ) : (
-                <MonthChips value={item.services || []} onChange={(v) => patch(index, { services: v })} options={products} />
-              )}
+              <div className="staff-tax-flags">
+                <Toggle value={item.invest} onChange={(v) => patch(index, { invest: v })} label="С начала проекта (и до продаж)" />
+              </div>
+              <div className="staff-tax-list">
+                {STAFF_TAX_ROWS.map((row) => (
+                  <div key={row.exempt} className="staff-tax-row">
+                    <Toggle
+                      value={Boolean(item[row.exempt])}
+                      onChange={(v) => patch(index, { [row.exempt]: v })}
+                      label={row.label}
+                    />
+                    <div className="staff-tax-rate" title="Ставка для всего проекта">
+                      <NumberInput
+                        max={100}
+                        value={form[row.rate]}
+                        suffix="%"
+                        placeholder={String(rates[row.rate] ?? row.fallback)}
+                        onChange={(v) => set(row.rate, v)}
+                        aria-label={`Ставка ${row.rate}`}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <span className="fm-field__hint">Оклад — начисление до удержаний. ОПВ и ВОСМС удерживаются из зарплаты к выплате; СО, ОПВР, ООСМС и соцналог (ТОО на ОУР) — за счёт работодателя. Процент общий для проекта; тумблер — только для этой должности. ОПВР: процент — для 2026 года, дальше по закону: 2027 — {rates.opvr_rate_2027 ?? 4.5}%, с 2028 — {rates.opvr_rate_2028 ?? 5}%.</span>
             </div>
           </details>
         </article>
@@ -883,16 +1023,6 @@ export function CompanyStep({ form, set, rateDefaults }) {
               />
             </Field>
           ) : null}
-          <Field label="ВОСМС работника" required field="vosms_rate" hint={`Дефолт ${rates.vosms_rate ?? 2}%. Удерживается из зарплаты к выплате.`}>
-            <NumberInput
-              required
-              max={100}
-              value={form.vosms_rate}
-              suffix="%"
-              placeholder={String(rates.vosms_rate ?? 2)}
-              onChange={(v) => set('vosms_rate', v)}
-            />
-          </Field>
           {too && regime === 1 ? (
             <Field
               label="Социальный налог"
@@ -1325,6 +1455,7 @@ export function SalesStep({ form, set, notify }) {
   const planTo = bounds.asked || form.planning_to
   const years = yearsBetween(bounds.from || form.planning_from, planTo)
   const highlight = useHighlightField()
+  const fullStart = fullLoadAtStart(form)
   const salesProblem = form.sales_start
     ? dateRangeIssue(form.sales_start, bounds.from, planTo, 'Начало продаж')
     : highlight === 'sales_start'
@@ -1681,7 +1812,7 @@ export function SalesStep({ form, set, notify }) {
           </RowIcon>
         }
         title="Сроки продаж"
-        text="Старт и выход на полный объём — даты в периоде планирования"
+        text="Старт, загрузка в первый месяц и выход на 100%"
       >
         <div className="setup-row__grid">
           <Field
@@ -1703,6 +1834,26 @@ export function SalesStep({ form, set, notify }) {
                   set('planned_volume', v)
                 }
               }}
+            />
+          </Field>
+          <Field
+            label="Загрузка в первый месяц"
+            required={!fullStart}
+            field="sales_start_load"
+            hint={
+              fullStart
+                ? 'Выход на 100% в месяц старта — разгона нет, с первого месяца 100%. Для разгона поставьте «Выход на 100%» позже'
+                : 'От этой доли линейный рост до 100% к дате выхода на объём'
+            }
+          >
+            <NumberInput
+              required={!fullStart}
+              disabled={fullStart}
+              max={100}
+              value={fullStart ? 100 : form.sales_start_load}
+              suffix="%"
+              placeholder="50"
+              onChange={(v) => set('sales_start_load', v)}
             />
           </Field>
           <Field
@@ -1833,7 +1984,11 @@ export function SalesStep({ form, set, notify }) {
           </RowIcon>
         }
         title="Активы"
-        text={assetTotal ? `Всего ${formatMoney(assetTotal, sign)}` : 'Оборудование, помещение, работы и материалы'}
+        text={
+          assetTotal
+            ? `Всего ${formatMoney(assetTotal, sign)}. Срок амортизации — у каждой позиции (помещения обычно 25 лет).`
+            : 'Оборудование, помещение, работы, материалы и товарный запас. Срок амортизации задаётся по каждой строке.'
+        }
       >
         <div className="sales-tabs" role="tablist">
           {ASSET_TABS.map(([key, label]) => (
@@ -1850,25 +2005,41 @@ export function SalesStep({ form, set, notify }) {
             </button>
           ))}
         </div>
-        <AssetCards
-          items={form[assetTab] || []}
-          onChange={(rows) => set(assetTab, rows)}
-          sign={sign}
-          projectStart={projectStart}
-        />
+        {assetTab === 'inventory' ? (
+          <InventoryCards
+            items={form.inventory || []}
+            onChange={(rows) => set('inventory', rows)}
+            sign={sign}
+          />
+        ) : (
+          <AssetCards
+            category={assetTab}
+            items={form[assetTab] || []}
+            onChange={(rows) => set(assetTab, rows)}
+            sign={sign}
+            projectStart={projectStart}
+          />
+        )}
       </SetupRow>
     </div>
   )
 }
 
-export function ExpensesStep({ form, set }) {
+export function ExpensesStep({ form, set, rateDefaults }) {
   const sign = CURRENCY_SIGNS[form.currency]
+  const rates = rateDefaults || {}
   const [expenseTab, setExpenseTab] = useState('admin_expenses')
   const productOptions = form.volume_sales
     .map((row) => String(row.name || '').trim())
     .filter(Boolean)
     .map((name) => [name, name])
   const monthlyTotal = (form.salary || []).reduce((sum, item) => sum + num(item.count) * num(item.salary), 0)
+  const cogs = zeroCogsState(form)
+  const namedStaff = (form.salary || []).filter((item) => String(item.name || '').trim())
+  const noProductionStaff =
+    namedStaff.length > 0 &&
+    namedStaff.every((item) => Number(item.industrial) === 0 && item.industrial !== '' && item.industrial != null) &&
+    (form.volume_sales || []).some((row) => String(row.name || '').trim() && num(row.count) > 0 && num(row.price) > 0)
 
   return (
     <div className="setup">
@@ -1890,6 +2061,21 @@ export function ExpensesStep({ form, set }) {
         )}
         <p className="sales-note">По графику: «каждые 2 месяца» — платёж через один, а не сумма за первые два месяца.</p>
         <ExpenseCards id="cogs" items={form.variable_other} onChange={(rows) => set('variable_other', rows)} sign={sign} />
+        {cogs.zero ? (
+          <div className="setup-warning zero-cogs">
+            <p>
+              Себестоимость равна нулю, а продажи есть: вся выручка станет валовой прибылью. Для торговли и производства
+              это почти всегда ошибка — добавьте закупку, сырьё, упаковку и другие затраты на единицу продукции.
+            </p>
+            <Checkbox
+              value={Boolean(form.zero_cogs_confirmed)}
+              onChange={(v) => set('zero_cogs_confirmed', v)}
+              label="Подтверждаю: переменной себестоимости у продаж нет (например, услуги без закупок)"
+            />
+          </div>
+        ) : cogs.withoutCost.length ? (
+          <p className="sales-note">Без себестоимости на единицу: {cogs.withoutCost.join(', ')}. Проверьте, что это так.</p>
+        ) : null}
       </SetupRow>
 
       <SetupRow
@@ -1903,7 +2089,20 @@ export function ExpensesStep({ form, set }) {
         title="Зарплаты"
         text={monthlyTotal ? `Оклад ${formatMoney(monthlyTotal, sign)} в месяц` : 'Должности, оклад и доля от выручки'}
       >
-        <StaffCards items={form.salary} onChange={(rows) => set('salary', rows)} sign={sign} products={productOptions} />
+        <StaffCards
+          items={form.salary}
+          onChange={(rows) => set('salary', rows)}
+          sign={sign}
+          form={form}
+          set={set}
+          rates={rates}
+        />
+        {noProductionStaff ? (
+          <p className="setup-warning">
+            Все сотрудники отмечены как административные, поэтому в себестоимости нет зарплаты. Если кто-то делает продукт
+            или оказывает услугу клиенту, выберите для него «Производственный».
+          </p>
+        ) : null}
       </SetupRow>
 
       <SetupRow
@@ -2008,12 +2207,14 @@ export function InvestmentStep({ form, set }) {
     const attracted = {}
     for (const [key] of INVEST_FIELDS) {
       const row = current.find((item) => item.key === key)
-      const total = row ? row.total : 0
-      const ownValue = withOwn ? num(form.own[key]) : 0
+      const total = Math.round(row ? row.total : 0)
+      // Не даём «своим» превышать потребность (например после already_owned).
+      let ownValue = withOwn ? Math.round(num(form.own[key])) : 0
+      if (ownValue > total) ownValue = total
       own[key] = ownValue
-      attracted[key] = Math.max(0, Math.round(total) - Math.round(ownValue))
+      attracted[key] = Math.max(0, total - ownValue)
     }
-    if (!withOwn && !amountsMatch(form.own, own)) set('own', own)
+    if (!amountsMatch(form.own, own)) set('own', own)
     if (!amountsMatch(form.attracted, attracted)) set('attracted', attracted)
   }, [totalsKey, withOwn, form, set])
 
@@ -2133,19 +2334,45 @@ export function InvestmentStep({ form, set }) {
                   const over = (withOwn && Math.round(own) > Math.round(row.total)) || (mixed && Math.round(credit) > Math.round(attracted))
                   return (
                     <tr key={row.key} className={over ? 'fm-panel--bad' : ''}>
-                      <td>{row.label}</td>
+                      <td>
+                        {row.label}
+                        {row.key === 'raw' && row.total > 0 ? (
+                          <span className="invest-sheet__source">
+                            Закупка запаса, не денежный резерв: оплачивается в первом месяце, остаток идёт в счёт
+                            следующих поставок — второй раз не покупается
+                          </span>
+                        ) : null}
+                      </td>
                       <td>
                         {row.operating ? (
-                          <span className="fm-panel__calc">
-                            {formatMoney(row.base, sign)} {row.key === 'raw' ? 'в месяц (средн.)' : 'в месяц'} ×
-                            <NumberInput
-                              integer
-                              max={120}
-                              value={form[`months_${row.key}`]}
-                              suffix="мес."
-                              onChange={(v) => setMonths(row.key, v)}
-                            />
-                          </span>
+                          row.stockListed ? (
+                            <span className="invest-sheet__source">
+                              Из списка «Товарный запас» · оборотный капитал, без амортизации
+                            </span>
+                          ) : row.periodAware ? (
+                            <span className="fm-panel__calc">
+                              На
+                              <NumberInput
+                                integer
+                                max={120}
+                                value={form[`months_${row.key}`]}
+                                suffix="мес."
+                                onChange={(v) => setMonths(row.key, v)}
+                              />
+                              запуска · с учётом периода (год ≠ × месяцев)
+                            </span>
+                          ) : (
+                            <span className="fm-panel__calc">
+                              {formatMoney(row.base, sign)} {row.key === 'raw' ? 'в месяц (средн.)' : 'в месяц'} ×
+                              <NumberInput
+                                integer
+                                max={120}
+                                value={form[`months_${row.key}`]}
+                                suffix="мес."
+                                onChange={(v) => setMonths(row.key, v)}
+                              />
+                            </span>
+                          )
                         ) : (
                           <span className="invest-sheet__source">Из списков на шаге 2</span>
                         )}
@@ -2248,10 +2475,23 @@ export function InvestmentStep({ form, set }) {
               </div>
 
               {detailRow.operating ? (
-                <p className="invest-detail__formula">
-                  {formatMoney(detailRow.base, sign)} в месяц × {detailRow.months} мес. ={' '}
-                  <strong>{formatMoney(detailRow.total, sign)}</strong>
-                </p>
+                detailRow.stockListed ? (
+                  <p className="invest-detail__formula">
+                    Первоначальный товарный запас <strong>{formatMoney(detailRow.total, sign)}</strong>
+                    {' — '}в ДДС один раз через ячейку запаса, без амортизации и без CAPEX.
+                  </p>
+                ) : detailRow.periodAware ? (
+                  <p className="invest-detail__formula">
+                    На {detailRow.months} мес. запуска с учётом периода оплаты ={' '}
+                    <strong>{formatMoney(detailRow.total, sign)}</strong>
+                    . Годовой платёж закладывается один раз на первые 12 месяцев, а не умножается на число месяцев.
+                  </p>
+                ) : (
+                  <p className="invest-detail__formula">
+                    {formatMoney(detailRow.base, sign)} в месяц × {detailRow.months} мес. ={' '}
+                    <strong>{formatMoney(detailRow.total, sign)}</strong>
+                  </p>
+                )
               ) : (
                 <p className="invest-detail__formula">Сумма из списков активов на шаге «Продажи».</p>
               )}
@@ -2272,7 +2512,7 @@ export function InvestmentStep({ form, set }) {
                 </ul>
               )}
 
-              {detailRow.operating && detailLines.length > 0 ? (
+              {detailRow.operating && detailLines.length > 0 && !detailRow.stockListed && !detailRow.periodAware ? (
                 <p className="fm-field__hint">
                   В таблице выше в инвестиции идёт месячная сумма × число месяцев. Здесь позиции — за один месяц.
                 </p>

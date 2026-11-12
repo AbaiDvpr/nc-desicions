@@ -110,6 +110,29 @@ def ensure_schema() -> None:
                     )
                 )
                 conn.execute(text("UPDATE fem_rate_settings SET simplified_too_rate = simplified_rate"))
+        payroll_defaults = {
+            "opv_rate": 10,
+            "vosms_rate": 2,
+            "ipn_rate": 10,
+            "ipn_rate_high": 15,
+            "so_rate": 5,
+            "opvr_rate": 3.5,
+            "opvr_rate_2027": 4.5,
+            "opvr_rate_2028": 5,
+            "osms_rate": 3,
+            "mrp": 4325,
+            "vat_threshold_mrp": 10000,
+            "simplified_limit_mrp": 600000,
+        }
+        for column, default in payroll_defaults.items():
+            if column not in rate_columns:
+                with engine.begin() as conn:
+                    conn.execute(
+                        text(
+                            f"ALTER TABLE fem_rate_settings ADD COLUMN {column} DOUBLE PRECISION "
+                            f"NOT NULL DEFAULT {default}"
+                        )
+                    )
 
     from app.tariffs import backfill_tariffs
     from app.fem_rates import ensure_fem_rates

@@ -29,9 +29,20 @@ class FemRatesIn(BaseModel):
     cit_ip_rate: float = Field(ge=0, le=100)
     cit_too_rate: float = Field(ge=0, le=100)
     vat_rate: float = Field(ge=0, le=100)
+    opv_rate: float = Field(ge=0, le=100)
     vosms_rate: float = Field(ge=0, le=100)
+    ipn_rate: float = Field(ge=0, le=100)
+    ipn_rate_high: float = Field(ge=0, le=100)
+    so_rate: float = Field(ge=0, le=100)
+    opvr_rate: float = Field(ge=0, le=100)
+    opvr_rate_2027: float = Field(default=4.5, ge=0, le=100)
+    opvr_rate_2028: float = Field(default=5.0, ge=0, le=100)
+    osms_rate: float = Field(ge=0, le=100)
     social_tax_rate: float = Field(ge=0, le=100)
     nbk_bank_spread: float = Field(ge=0, le=50)
+    mrp: float = Field(default=4325.0, gt=0, le=1_000_000)
+    vat_threshold_mrp: float = Field(default=10000.0, ge=0, le=100_000_000)
+    simplified_limit_mrp: float = Field(default=600000.0, ge=0, le=100_000_000)
     mzp_rows: list[MzpRowIn] | None = None
     mzp_schedule: str | None = None
 

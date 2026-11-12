@@ -19,9 +19,21 @@ DEFAULT_RATES = {
     "cit_ip_rate": 10.0,
     "cit_too_rate": 20.0,
     "vat_rate": 16.0,
+    "opv_rate": 10.0,
     "vosms_rate": 2.0,
+    "ipn_rate": 10.0,
+    "ipn_rate_high": 15.0,
+    "so_rate": 5.0,
+    "opvr_rate": 3.5,
+    "opvr_rate_2027": 4.5,
+    "opvr_rate_2028": 5.0,
+    "osms_rate": 3.0,
     "social_tax_rate": 6.0,
     "nbk_bank_spread": 4.0,
+    # Пороги НК РК 2026 в МРП и сам МРП в тенге (не проценты).
+    "mrp": 4325.0,
+    "vat_threshold_mrp": 10000.0,
+    "simplified_limit_mrp": 600000.0,
 }
 
 # Старое единое поле — зеркало упрощёнки ИП для совместимости.
@@ -81,6 +93,10 @@ def ensure_fem_rates(db: Session) -> FemRateSetting:
     if not getattr(row, "mzp_schedule", None):
         row.mzp_schedule = DEFAULT_MZP_SCHEDULE
         changed = True
+    for key, default in DEFAULT_RATES.items():
+        if getattr(row, key, None) is None:
+            setattr(row, key, float(default))
+            changed = True
     # Держим legacy-поле в синхроне с ИП.
     if row.simplified_rate is None or float(row.simplified_rate) != float(row.simplified_ip_rate):
         row.simplified_rate = float(row.simplified_ip_rate)
@@ -115,6 +131,17 @@ def rates_payload(row: FemRateSetting | None = None) -> dict:
         "label_nbk": f"НБ РК + {data['nbk_bank_spread']:g}%",
         "source_note": "Дефолты админа отдельно для ИП и ТОО. В анкете клиент может заменить ставку для своей модели.",
     }
+
+
+def load_rates() -> dict:
+    """Справочник админки для Excel; при недоступной БД — дефолты."""
+    try:
+        from app.database import SessionLocal
+
+        with SessionLocal() as db:
+            return rates_payload(db.get(FemRateSetting, 1))
+    except Exception:
+        return rates_payload(None)
 
 
 def load_mzp_schedule() -> dict[int, float]:

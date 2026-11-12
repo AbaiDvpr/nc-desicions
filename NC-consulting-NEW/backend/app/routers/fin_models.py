@@ -1,8 +1,11 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.audit_export import build_audit_payload
 from app.bp_jobs import (
     AttemptLimit,
     NothingToRetry,
@@ -26,15 +29,17 @@ from app.fem_v3_book import build_fem_v3_excel
 from app.fem_v4_book import build_fem_v4_excel
 from app.fem_v5_book import build_fem_v5_excel
 from app.models import BpJob, BpTemplate, FinModel, User
-from app.project_form import ProjectFormIn, card_facts, to_fin_model
+from app.project_form import ZERO_COGS_MESSAGE, ProjectFormIn, card_facts, to_fin_model, zero_cogs_state
 from app.schemas import DraftIn, DraftOut, FinModelData, FinModelDetail, FinModelOut, FinModelPage
 from app.security import get_current_user
 from app.tariffs import ensure_can_create_model
+from app.xlsx_calc import XlsxCalcError, recalculate_xlsx
 
 router = APIRouter(prefix="/api/fin-models", tags=["fin-models"])
 
 DOCX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+JSON_MEDIA_TYPE = "application/json; charset=utf-8"
 
 
 def _draft_body(model: FinModel) -> dict | None:
@@ -243,6 +248,16 @@ def update_draft(
     return _to_out(model)
 
 
+def _ready_payload(data: ProjectFormIn) -> dict:
+    payload = data.model_dump()
+    cogs = zero_cogs_state(payload)
+    if cogs["zero"] and not cogs["confirmed"]:
+        raise HTTPException(status_code=422, detail=ZERO_COGS_MESSAGE)
+    if not cogs["zero"]:
+        payload["zero_cogs_confirmed"] = False
+    return payload
+
+
 @router.post("", response_model=FinModelOut, status_code=status.HTTP_201_CREATED)
 def create_fin_model(
     data: ProjectFormIn,
@@ -251,7 +266,7 @@ def create_fin_model(
     db: Session = Depends(get_db),
 ):
     ensure_can_create_model(db, user)
-    payload = data.model_dump()
+    payload = _ready_payload(data)
     name = data.name.strip()
     if draft_id is not None:
         model = _get_active(db, user, draft_id)
@@ -299,9 +314,10 @@ def update_fin_model(
 ):
     model = _get_active(db, user, model_id)
     _ready_form(model)
+    payload = _ready_payload(data)
     model.name = data.name.strip()
     model.status = "ready"
-    model.data = data.model_dump()
+    model.data = payload
     db.commit()
     db.refresh(model)
     return _to_out(model)
@@ -497,11 +513,50 @@ def download_fem_v5(
     db: Session = Depends(get_db),
 ):
     model = _get_active(db, user, model_id)
-    return _attachment(
-        build_fem_v5_excel(user, _ready_form(model)),
-        XLSX_MEDIA_TYPE,
-        f"NC-fem-v5-{model.id}.xlsx",
-    )
+    raw = build_fem_v5_excel(user, _ready_form(model))
+    try:
+        content = recalculate_xlsx(raw)
+    except XlsxCalcError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Не удалось пересчитать Excel перед скачиванием",
+        ) from exc
+    return _attachment(content, XLSX_MEDIA_TYPE, f"NC-fem-v5-{model.id}.xlsx")
+
+
+@router.get("/{model_id}/audit.json")
+def download_audit_json(
+    model_id: int,
+    steps: str = Query("1,2,3,4", max_length=40),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """JSON анкеты с пояснениями для ИИ-аудита. Шаги 1–4."""
+    model = _get_active(db, user, model_id)
+    form = _ready_form(model)
+    allowed = {1, 2, 3, 4}
+    wanted: list[int] = []
+    for part in str(steps or "1,2,3,4").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            number = int(part)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный параметр steps") from exc
+        if number not in allowed:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Доступны шаги 1–4. Укажите steps=1,2,3,4",
+            )
+        if number not in wanted:
+            wanted.append(number)
+    if not wanted:
+        wanted = [1, 2, 3, 4]
+    payload = build_audit_payload(model.id, model.name, form, steps=wanted)
+    body = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+    label = "-".join(str(n) for n in wanted)
+    return _attachment(body, JSON_MEDIA_TYPE, f"NC-audit-steps{label}-{model.id}.json")
 
 
 @router.get("/{model_id}/model.xlsx")
