@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api.js'
 import ExcelDownloads from '../components/ExcelDownloads.jsx'
 import Toast from '../components/Toast.jsx'
-import { draftProgress, stepAnchor, stepAssetTab, stepField, stepProblem, toPayload } from './finmodel/helpers.js'
+import { draftProgress, formWarnings, stepAnchor, stepAssetTab, stepField, stepProblem, toPayload } from './finmodel/helpers.js'
 import { DEFAULT_LIFE_YEARS, STEPS, initialForm, newVolume } from './finmodel/options.js'
 import { CompanyStep, ExpensesStep, InvestmentStep, SalesStep } from './finmodel/steps.jsx'
 
@@ -525,6 +525,22 @@ export default function FinModelCreate() {
           <div className="wizard__fields">
             <StepFields form={form} set={set} notify={showNotice} rateDefaults={rateDefaults} />
           </div>
+
+          {isLast && formWarnings(form).length > 0 && (
+            <div className="alert alert--warn draft-offer form-warnings">
+              <b>Проверьте перед формированием модели</b>
+              <ul>
+                {formWarnings(form).map((warning, index) => (
+                  <li key={index}>
+                    {warning.text}{' '}
+                    <button type="button" className="btn btn--small" onClick={() => goTo(warning.step)}>
+                      Шаг {warning.step + 1}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {offer && (
             <div className="alert alert--warn draft-offer">

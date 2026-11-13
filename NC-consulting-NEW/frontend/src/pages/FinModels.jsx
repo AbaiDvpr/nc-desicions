@@ -3,6 +3,10 @@ import { Link } from 'react-router-dom'
 import { api, finModelFiles } from '../api.js'
 import BpDocument from '../components/BpDocument.jsx'
 import BpEmpty from '../components/BpEmpty.jsx'
+import BpImages from '../components/BpImages.jsx'
+import BpMiniCover from '../components/BpMiniCover.jsx'
+import BpProfile from '../components/BpProfile.jsx'
+import { COVER_LABELS } from '../bpCovers.js'
 import BpTasks from '../components/BpTasks.jsx'
 import AuditDownload from '../components/AuditDownload.jsx'
 import ExcelDownloads from '../components/ExcelDownloads.jsx'
@@ -34,6 +38,23 @@ function TrashIcon() {
         fill="currentColor"
         d="M 20.5 4 A 1.50015 1.50015 0 0 0 19.066406 6 L 14.640625 6 C 12.803372 6 11.082924 6.9194511 10.064453 8.4492188 L 7.6972656 12 L 7.5 12 A 1.50015 1.50015 0 1 0 7.5 15 L 8.2636719 15 A 1.50015 1.50015 0 0 0 8.6523438 15.007812 L 11.125 38.085938 C 11.423352 40.868277 13.795836 43 16.59375 43 L 31.404297 43 C 34.202211 43 36.574695 40.868277 36.873047 38.085938 L 39.347656 15.007812 A 1.50015 1.50015 0 0 0 39.728516 15 L 40.5 15 A 1.50015 1.50015 0 1 0 40.5 12 L 40.302734 12 L 37.935547 8.4492188 C 36.916254 6.9202798 35.196001 6 33.359375 6 L 28.933594 6 A 1.50015 1.50015 0 0 0 27.5 4 L 20.5 4 z M 14.640625 9 L 33.359375 9 C 34.196749 9 34.974746 9.4162203 35.439453 10.113281 L 36.697266 12 L 11.302734 12 L 12.560547 10.113281 A 1.50015 1.50015 0 0 0 12.5625 10.111328 C 13.025982 9.4151428 13.801878 9 14.640625 9 z M 11.669922 15 L 36.330078 15 L 33.890625 37.765625 C 33.752977 39.049286 32.694383 40 31.404297 40 L 16.59375 40 C 15.303664 40 14.247023 39.049286 14.109375 37.765625 L 11.669922 15 z"
       />
+    </svg>
+  )
+}
+
+function EyeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true">
+      <path d="M2.5 12C4.5 7.5 8 5 12 5s7.5 2.5 9.5 7c-2 4.5-5.5 7-9.5 7s-7.5-2.5-9.5-7z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.6" />
+    </svg>
+  )
+}
+
+function BackIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true">
+      <path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
@@ -89,13 +110,30 @@ function variantNote(item) {
   if (!item) return 'Не запрашивали'
   if (item.status === 'done') return 'Готово'
   if (item.status === 'error') return 'Ошибка'
-  if (item.status === 'running') return 'В работе'
-  if (item.status === 'queued') return 'В очереди'
   return 'Не запрашивали'
+}
+
+function variantBuild(item) {
+  if (!item || (item.status !== 'queued' && item.status !== 'running')) return null
+  const tasks = item.tasks || []
+  const total = tasks.length
+  const ready = tasks.filter((task) => task.status === 'done').length
+  return {
+    label: total ? `Собирает ${ready} из ${total}` : 'Собирает',
+    ratio: total ? ready / total : 0,
+  }
 }
 
 function designCode(index) {
   return `#${String(index + 1).padStart(3, '0')}`
+}
+
+function coverKind(design) {
+  return design.slug === 'bank' ? 'bank' : design.cover
+}
+
+function coverLabel(design) {
+  return COVER_LABELS[coverKind(design)] || ''
 }
 
 function designMark(designs, templateId) {
@@ -121,6 +159,7 @@ function ModelCard({ model, archived, busy, onArchive, onRestore }) {
   const [wordBusy, setWordBusy] = useState(false)
   const [wordError, setWordError] = useState('')
   const [designs, setDesigns] = useState(null)
+  const [companyName, setCompanyName] = useState('')
   const [picked, setPicked] = useState(null)
   const [lookOpen, setLookOpen] = useState(false)
   const [variantId, setVariantId] = useState(null)
@@ -161,6 +200,23 @@ function ModelCard({ model, archived, busy, onArchive, onRestore }) {
       clearInterval(timer)
     }
   }, [model.id, live, reviewing])
+
+  useEffect(() => {
+    if (!tasksOpen) return undefined
+    let stop = false
+    api
+      .bpProfile(model.id)
+      .then((payload) => {
+        if (stop) return
+        const named = payload.company?.company_name
+        const chosen = payload.companies?.find((row) => row.id === payload.company_id)
+        setCompanyName(named || chosen?.name || '')
+      })
+      .catch(() => {})
+    return () => {
+      stop = true
+    }
+  }, [tasksOpen, model.id])
 
   useEffect(() => {
     if (!tasksOpen || designs) return undefined
@@ -275,7 +331,6 @@ function ModelCard({ model, archived, busy, onArchive, onRestore }) {
   const to = formatMonth(model.planning_to)
   const period = from && to ? `${from} — ${to}` : from || to
   const pickedDesign = designs?.find((item) => item.id === picked)
-  const pickedMark = designMark(designs, pickedDesign?.id)
   const wordQuery = new URLSearchParams()
   if (picked) wordQuery.set('template_id', String(picked))
   if (shown?.id) wordQuery.set('job_id', String(shown.id))
@@ -287,11 +342,13 @@ function ModelCard({ model, archived, busy, onArchive, onRestore }) {
   const used = job?.used || 0
   const canAsk = !live && (!job || ((job.status === 'done' || job.status === 'error') && used < limit))
   const askLabel = job ? 'Хочу получить ещё раз' : 'Хочу получить бизнес-план'
+  const askReady = Boolean(designs && pickedDesign && bpStatus !== 'queued' && bpStatus !== 'running')
   const retryLabel = failedTasks.length === 1
     ? `Пройти ещё раз: ${failedTasks[0].title}`
     : 'Пройти ещё раз по несобранным пунктам'
   const look = {
     name: model.name,
+    company: companyName,
     legal: model.legal_form,
     financing: model.financing,
     period,
@@ -401,15 +458,21 @@ function ModelCard({ model, archived, busy, onArchive, onRestore }) {
           >
             {lookOpen && pickedDesign ? (
             <div className="drawer__body">
-                <button type="button" className="drawer__back" onClick={() => setLookOpen(false)}>
-                  Назад
-                </button>
                 <div className="drawer__head">
-                  <div>
-                    <h2 id={`bp-drawer-${model.id}`}>
-                      {pickedMark ? pickedMark.name : designCode(0)}
-                    </h2>
-                    <p className="muted">{model.name}</p>
+                  <div className="drawer__title">
+                    <button
+                      type="button"
+                      className="drawer__back"
+                      onClick={() => setLookOpen(false)}
+                      aria-label="Назад"
+                      title="Назад"
+                    >
+                      <BackIcon />
+                    </button>
+                    <div>
+                      <h2 id={`bp-drawer-${model.id}`}>Просмотр шаблона</h2>
+                      <p className="muted">{model.name}</p>
+                    </div>
                   </div>
                   <button type="button" className="drawer__close" onClick={closeDrawer} aria-label="Закрыть">
                     ×
@@ -436,12 +499,14 @@ function ModelCard({ model, archived, busy, onArchive, onRestore }) {
                   {variantNames.map((name, index) => {
                     const item = attempts.find((attempt) => attempt.number === index + 1)
                     const mark = designMark(designs, item?.template_id)
+                    const build = variantBuild(item)
                     return (
                       <button
                         key={name}
                         type="button"
                         className={`bp-variants__item${item?.id === shown?.id ? ' is-on' : ''}${item?.status ? ` is-${item.status}` : ''}`}
                         disabled={!item}
+                        aria-busy={Boolean(build)}
                         onClick={() => {
                           if (!item) return
                           setVariantId(item.id)
@@ -451,7 +516,20 @@ function ModelCard({ model, archived, busy, onArchive, onRestore }) {
                       >
                         <span className="bp-variants__step">{index + 1}</span>
                         <span className="bp-variants__name">{mark?.name || name}</span>
-                        <span className="bp-variants__note">{variantNote(item)}</span>
+                        {build ? (
+                          <span className="bp-variants__build">
+                            <span className="spinner spinner--inline" aria-hidden="true" />
+                            <span className="bp-variants__note">{build.label}</span>
+                            <span className="bp-variants__bar" aria-hidden="true">
+                              <span
+                                className={build.ratio > 0 ? '' : 'is-wait'}
+                                style={build.ratio > 0 ? { width: `${Math.round(build.ratio * 100)}%` } : undefined}
+                              />
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="bp-variants__note">{variantNote(item)}</span>
+                        )}
                       </button>
                     )
                   })}
@@ -467,39 +545,33 @@ function ModelCard({ model, archived, busy, onArchive, onRestore }) {
               <div className="bp-pick drawer__pick">
                 <div className="bp-pick__row">
                   {designs.map((item, index) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className={`bp-pick__tile${item.id === picked ? ' is-on' : ''}${item.slug === 'bank' ? ' is-bank' : ''}`}
-                      style={{ '--bp': item.accent }}
-                      onClick={() => setPicked(item.id)}
-                    >
-                      <span className={`bp-pick__mini bp-pick__mini--${item.cover}`}>
-                        <strong>{designCode(index)}</strong>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-                {pickedDesign && (
-                  <div className="bp-pick__foot">
-                    <p>{pickedDesign.description}</p>
-                    <div className="bp-pick__actions">
-                      {canAsk && (
-                        <button
-                          type="button"
-                          className="btn btn--primary"
-                          disabled={wordBusy}
-                          onClick={() => sendJob(Boolean(job), picked)}
-                        >
-                          {askLabel}
-                        </button>
-                      )}
-                      <button type="button" className="btn" onClick={() => openLook(picked)}>
-                        Посмотреть больше
+                    <div key={item.id} className="bp-pick__cell">
+                      <button
+                        type="button"
+                        className={`bp-pick__tile${item.id === picked ? ' is-on' : ''}`}
+                        style={{ '--bp': item.accent }}
+                        aria-label={`Шаблон ${designCode(index)}${coverLabel(item) ? ` ${coverLabel(item)}` : ''}`}
+                        aria-pressed={item.id === picked}
+                        onClick={() => setPicked(item.id)}
+                      >
+                        <BpMiniCover kind={coverKind(item)} />
+                        <span className="bp-pick__label">
+                          <strong>{designCode(index)}</strong>
+                          {coverLabel(item) && <span>{coverLabel(item)}</span>}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="bp-pick__eye"
+                        aria-label={`Посмотреть шаблон ${designCode(index)}`}
+                        title="Посмотреть шаблон"
+                        onClick={() => openLook(item.id)}
+                      >
+                        <EyeIcon />
                       </button>
                     </div>
-                  </div>
-                )}
+                  ))}
+                </div>
               </div>
             )}
             {!job && !wordBusy && !wordError && <BpEmpty />}
@@ -509,7 +581,15 @@ function ModelCard({ model, archived, busy, onArchive, onRestore }) {
                 {listOpen ? 'Скрыть разделы' : 'Показать разделы'}
               </button>
             )}
+            {listOpen && shown?.tasks && pickedDesign && shown.template_id && shown.template_id !== pickedDesign.id && (
+              <p className="bp-list-note">
+                Этот вариант собран по шаблону {shown.template_name || 'другому шаблону'}, поэтому разделы у него свои. Чтобы список и
+                тексты совпали с пунктами шаблона {designCode(designs.indexOf(pickedDesign))}, соберите новый вариант с этим шаблоном.
+              </p>
+            )}
             {listOpen && shown?.tasks && <BpTasks job={shown} onReview={reviewTask} reviewBusy={reviewBusy} />}
+            <BpProfile modelId={model.id} />
+            <BpImages modelId={model.id} />
             {failedTasks.length > 0 && !live && (
               <>
                 <button type="button" className="btn btn--primary" disabled={wordBusy} onClick={retryFailed}>
@@ -521,14 +601,31 @@ function ModelCard({ model, archived, busy, onArchive, onRestore }) {
             {job && used >= limit && <p className="bp-variants__limit">Три варианта уже собраны.</p>}
             </div>
             )}
-            {shown?.status === 'done' && (
+            {(shown?.status === 'done' || (askReady && canAsk)) && (
               <div className="drawer__downloads">
-                <a className="btn btn--primary" href={wordHref}>
-                  Скачать Word
-                </a>
-                <a className="btn" href={pdfHref}>
-                  Скачать PDF
-                </a>
+                {shown?.status === 'done' && (
+                  <>
+                    <a className="btn btn--primary" href={wordHref}>
+                      Скачать Word
+                    </a>
+                    <a className="btn" href={pdfHref}>
+                      Скачать PDF
+                    </a>
+                  </>
+                )}
+                {askReady && canAsk && (
+                  <button
+                    type="button"
+                    className={`btn${shown?.status === 'done' ? '' : ' btn--primary'}`}
+                    disabled={wordBusy}
+                    onClick={() => {
+                      setLookOpen(false)
+                      sendJob(Boolean(job), picked)
+                    }}
+                  >
+                    {askLabel}
+                  </button>
+                )}
               </div>
             )}
           </aside>

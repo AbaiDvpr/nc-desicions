@@ -104,8 +104,8 @@
     },
     {
       "check": "Project NPV/IRR present",
-      "npv": 320562631.413791,
-      "irr": 0.519936195473664
+      "npv": 265218806.774717,
+      "irr": 0.465444575639409
     },
     {
       "check": "Financing structure 80/0/66"

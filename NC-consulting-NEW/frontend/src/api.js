@@ -57,6 +57,8 @@ export const api = {
   createCompany: (payload) => request('/companies', { method: 'POST', body: payload }),
   getCompany: (id) => request(`/companies/${id}`),
   updateCompany: (id, payload) => request(`/companies/${id}`, { method: 'PUT', body: payload }),
+  companyBpProfile: (id) => request(`/companies/${id}/bp-profile`),
+  saveCompanyBpProfile: (id, payload) => request(`/companies/${id}/bp-profile`, { method: 'PUT', body: payload }),
   listRequisites: (id) => request(`/companies/${id}/requisites`),
   createRequisite: (id, payload) => request(`/companies/${id}/requisites`, { method: 'POST', body: payload }),
   updateRequisite: (id, requisiteId, payload) =>
@@ -101,6 +103,19 @@ export const api = {
   retryBpJob: (id, jobId) => request(`/fin-models/${id}/business-plan/${jobId}/retry`, { method: 'POST' }),
   reviewBpTask: (id, jobId, taskId, answer) =>
     request(`/fin-models/${id}/business-plan/${jobId}/tasks/${taskId}/review`, { method: 'POST', body: { answer } }),
+  bpImages: (id) => request(`/fin-models/${id}/bp-images`),
+  uploadBpImage: (id, file, { section, caption = '' } = {}) => {
+    const form = new FormData()
+    form.append('file', file, file.name || 'image.jpg')
+    if (section) form.append('section', section)
+    form.append('caption', caption)
+    return request(`/fin-models/${id}/bp-images`, { method: 'POST', form })
+  },
+  updateBpImage: (id, imageId, payload) =>
+    request(`/fin-models/${id}/bp-images/${imageId}`, { method: 'PATCH', body: payload }),
+  deleteBpImage: (id, imageId) => request(`/fin-models/${id}/bp-images/${imageId}`, { method: 'DELETE' }),
+  bpProfile: (id) => request(`/fin-models/${id}/bp-profile`),
+  saveBpProfile: (id, payload) => request(`/fin-models/${id}/bp-profile`, { method: 'PUT', body: payload }),
 }
 
 export const finModelFiles = (id) => ({

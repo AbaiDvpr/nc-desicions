@@ -13,13 +13,14 @@ from app.excel_report import (
     SEASONALITY_LABELS,
     TAX_REGIMES,
 )
+from app.currencies import SIGN_BY_ISO
 from app.models import User
 from app.schemas import FinModelData
 
 LOCAL_TZ = ZoneInfo("Asia/Almaty")
 PRIMARY = RGBColor(0x2F, 0x5B, 0xEA)
 MUTED = RGBColor(0x6B, 0x74, 0x89)
-CURRENCY_SIGNS = {"KZT": "₸", "USD": "$", "EUR": "€"}
+CURRENCY_SIGNS = SIGN_BY_ISO
 
 
 def _money(value: float, sign: str) -> str:

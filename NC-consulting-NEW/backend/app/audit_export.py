@@ -5,13 +5,15 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
+
+from app.currencies import AUDIT_CURRENCIES as CURRENCIES
 
 LEGAL_FORMS = {1: "ИП", 2: "ТОО"}
 YES_NO = {1: "Да", 0: "Нет"}
 BOOL_YES_NO = {True: "Да", False: "Нет"}
 TAX_REGIMES = {1: "Общеустановленный порядок (ОУР)", 4: "Упрощённая декларация"}
-CURRENCIES = {"kzt": "₸ Тенге (KZT)", "usd": "$ Доллар (USD)", "eur": "€ Евро (EUR)"}
 TIME_PARAMS = {1: "По годам", 3: "Помесячно"}
 SCHEDULES = {
     1: "5 дней в неделю (8 часов)",
@@ -379,7 +381,7 @@ def build_step1(form: dict) -> dict:
     nds = _as_int(form.get("nds"))
     regime = _as_int(form.get("tax_regime"))
     too = legal == 2
-    vat_on = regime == 1 and nds == 1
+    vat_on = nds == 1
     months = _horizon_months(form.get("planning_from"), form.get("planning_to"))
 
     return {
@@ -424,8 +426,9 @@ def build_step1(form: dict) -> dict:
                         display=_display(nds, YES_NO),
                         options=[{"value": k, "label": v} for k, v in YES_NO.items()],
                         explain=(
-                            "1 = да, 0 = нет. НДС в модели учитывается только вместе с ОУР (tax_regime=1): "
-                            "в ДДС к потокам добавляется НДС, ставка берётся из vat_rate."
+                            "1 = да, 0 = нет. НДС учитывается на любом налоговом режиме: цены в анкете без НДС, "
+                            "ОПиУ и налог режима — с выручки без НДС, в ДДС к потокам добавляется НДС по vat_rate, "
+                            "к уплате — исходящий минус входящий."
                         ),
                     ),
                 ],
@@ -520,8 +523,8 @@ def build_step1(form: dict) -> dict:
                         required=vat_on,
                         visible=vat_on,
                         display=_display(form.get("vat_rate"), suffix="%"),
-                        explain="Ставка НДС. Используется в ДДС, если ОУР и nds=1.",
-                        note=None if vat_on else "Поле скрыто: НДС не включён (нужны ОУР и плательщик НДС).",
+                        explain="Ставка НДС. Используется в ДДС, если nds=1 (на любом налоговом режиме).",
+                        note=None if vat_on else "Поле скрыто: не плательщик НДС.",
                     ),
                     _field(
                         "social_tax_rate",
@@ -806,6 +809,22 @@ def build_step2(form: dict) -> dict:
         ),
     ]
 
+    owned_rows = [
+        row
+        for key in ("equipment", "premises", "smr", "overhaul")
+        for row in (form.get(key) or [])
+        if isinstance(row, dict) and row.get("already_owned") and str(row.get("name") or "").strip()
+    ]
+    def _money(value) -> float:
+        try:
+            return float(value or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    owned_book = sum(_money(row.get("book_value")) or _money(row.get("price")) for row in owned_rows)
+    raw_owned = form.get("owned_assets_value")
+    owned_value = _as_num(raw_owned) if owned_rows and raw_owned not in (None, "") else None
+
     asset_sections = []
     for key, title, explain in ASSET_GROUPS:
         rows = [item for item in (form.get(key) or []) if isinstance(item, dict)]
@@ -962,6 +981,22 @@ def build_step2(form: dict) -> dict:
                         explain=(
                             "Пять групп: equipment, premises, smr, overhaul, inventory. "
                             "Пустые группы допустимы. Смотри items[] внутри каждой группы."
+                        ),
+                    ),
+                    _field(
+                        "owned_assets_value",
+                        "Согласованная оценка уже имеющихся активов",
+                        owned_value,
+                        type_="money",
+                        required=False,
+                        display=_display(owned_value) if owned_value is not None else (
+                            f"не задана — балансовая {owned_book:,.0f}".replace(",", " ") if owned_book else None
+                        ),
+                        explain=(
+                            "Вклад имуществом для режима «весь действующий бизнес» и доли инвестора. "
+                            "Пусто — балансовая (book_value), в Excel пометка «не подтверждена». "
+                            "Оценка новых инвестиций от неё не зависит: имеющиеся активы — прошлые затраты, "
+                            "их стоимость и остаток в поток новых инвестиций не входят."
                         ),
                     ),
                 ],
@@ -1468,5 +1503,65 @@ def build_audit_payload(model_id: int, model_name: str, form: dict, *, steps: li
         "exported_at": datetime.now(timezone.utc).isoformat(),
         "model": {"id": model_id, "name": model_name},
         "steps_included": included,
+        "warnings": form_warnings(form),
         "steps": built,
     }
+
+
+_CAPEX_LABELS = {"equipment": "Оборудование", "premises": "Недвижимость", "smr": "Работы", "overhaul": "Материалы"}
+_STOCK_WORDS = re.compile(r"(товар|запас|сыр[ьь]|ингредиент|полуфабрикат|закуп)", re.IGNORECASE)
+
+
+def _money_num(value) -> float:
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def form_warnings(form: dict) -> list[dict]:
+    """Те же нестрогие предупреждения, что анкета показывает перед формированием модели."""
+    warnings = []
+    for key, label in _CAPEX_LABELS.items():
+        for row in form.get(key) or []:
+            name = str((row or {}).get("name") or "").strip()
+            if not name or row.get("already_owned") or not _STOCK_WORDS.search(name):
+                continue
+            amount = f"{_money_num(row.get('price')):,.0f}".replace(",", " ")
+            warnings.append({
+                "step": 2,
+                "field": key,
+                "text": f"«{name}» ({label}, {amount}) похоже на товарный запас: в CAPEX амортизируется "
+                        "и не попадает в оборотный капитал. Товар или сырьё для продажи — в «Первоначальный запас».",
+            })
+    for row in form.get("premises") or []:
+        name = str((row or {}).get("name") or "").strip()
+        life = _money_num(row.get("life_years"))
+        if name and not row.get("already_owned") and 0 < life < 15:
+            warnings.append({
+                "step": 2,
+                "field": "premises",
+                "text": f"«{name}»: срок амортизации {life:g} лет. Для зданий обычно 20–25 лет.",
+            })
+    program = form.get("gov_program") if isinstance(form.get("gov_program"), dict) else {}
+    share = re.search(r"(\d+(?:[.,]\d+)?)\s*%\s*от\s+номинальной", str(program.get("detail") or ""), re.IGNORECASE)
+    bank = _money_num(form.get("loan_bank_rate"))
+    subsidy = _money_num(form.get("loan_subsidy_rate")) or max(0.0, bank - _money_num(form.get("loan_rate")))
+    if int(_money_num(form.get("financing"))) in (2, 4) and share and bank > 0:
+        limit = bank * float(share.group(1).replace(",", ".")) / 100
+        if subsidy > limit + 0.005:
+            warnings.append({
+                "step": 2,
+                "field": "loan_subsidy_rate",
+                "text": f"Субсидия {subsidy:.2f} п.п. больше лимита программы ({share.group(1)}% от ставки банка {bank:g}% = {limit:.2f} п.п.). "
+                        f"Ставка клиента должна быть не ниже {bank - limit:.2f}%.",
+            })
+    staff = [row for row in form.get("salary") or [] if str((row or {}).get("name") or "").strip()]
+    products = [row for row in form.get("volume_sales") or [] if str((row or {}).get("name") or "").strip()]
+    if products and staff and not any(int(_money_num(row.get("industrial"))) == 1 for row in staff):
+        warnings.append({
+            "step": 3,
+            "field": "salary",
+            "text": "Весь ФОТ отнесён к АУП. Сотрудники, которые делают продукт или оказывают услугу, — производственные.",
+        })
+    return warnings

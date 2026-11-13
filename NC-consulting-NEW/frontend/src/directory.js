@@ -9,9 +9,14 @@ export const TAX_REGIMES = [
 ]
 
 export const CURRENCIES = [
-  { value: 'kzt', label: 'тенге' },
-  { value: 'usd', label: 'долл.USD' },
-  { value: 'eur', label: 'EUR' },
+  { value: 'kzt', label: '₸ Тенге (KZT)' },
+  { value: 'usd', label: '$ Доллар (USD)' },
+  { value: 'eur', label: '€ Евро (EUR)' },
+  { value: 'rub', label: '₽ Рубль (RUB)' },
+  { value: 'uzs', label: 'сум Узбекский сум (UZS)' },
+  { value: 'kgs', label: 'сом Кыргызский сом (KGS)' },
+  { value: 'tjs', label: 'смн Таджикский сомони (TJS)' },
+  { value: 'aed', label: 'Dh Дирхам ОАЭ (AED)' },
 ]
 
 export function labelOf(options, value) {

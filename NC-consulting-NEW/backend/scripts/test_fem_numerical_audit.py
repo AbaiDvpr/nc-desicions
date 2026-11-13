@@ -26,7 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from app.database import SessionLocal  # noqa: E402
-from app.fem_v5_book import CAPEX, CF, EFFECT, FIN, PNL, SCHED, build_fem_v5_excel  # noqa: E402
+from app.fem_v5_book import CAPEX, CF, EFFECT, FIN, PNL, SCHED, SHEET, build_fem_v5_excel  # noqa: E402
 from app.models import FinModel  # noqa: E402
 from app.routers.fin_models import _ready_form  # noqa: E402
 from fastapi import HTTPException  # noqa: E402
@@ -334,8 +334,20 @@ def mirr_annual_monthly(flows: list[float], annual_rate: float) -> float | None:
     return (1.0 + m_month) ** 12.0 - 1.0
 
 
-def _irr_sheet_matches(result: XirrResult, irr_sheet: Any) -> Check:
+def _irr_sheet_matches(result: XirrResult, irr_sheet: Any, flows: list[float] | None = None, dates: list[date] | None = None) -> Check:
     """Сверка XIRR с листом с учётом отсутствия/неоднозначности решения."""
+    if result.status == "no_convergence" and flows and dates and _is_number(irr_sheet) and float(irr_sheet) > -1:
+        # Решатель не сходится на экстремальных ставках: проверяем саму ставку листа — NPV по ней ≈ 0.
+        residual = npv_dated(flows, dates, float(irr_sheet))
+        scale = sum(abs(value) for value in flows) or 1.0
+        return Check(
+            name="irr_independent_root_check",
+            expected="NPV(IRR листа) ≈ 0",
+            actual=residual,
+            tolerance=1e-6 * scale,
+            ok=abs(residual) <= 1e-6 * scale,
+            detail={"status": result.status, "sign_changes": result.sign_changes, "irr_sheet": irr_sheet},
+        )
     if result.status in ("no_sign_change", "no_convergence", "invalid_input"):
         ok = isinstance(irr_sheet, str) and (
             "знака" in str(irr_sheet).casefold()
@@ -492,7 +504,8 @@ def _effect_series(wb) -> dict:
         "deficit": effect.cell(11, 2).value,
         "dscr_min": effect.cell(10, 2).value,
         "terminal_by_row": {
-            i: _optional_finite(effect.cell(ORIGIN + i, 33).value, f"EFFECT.terminal[{i}]")
+            # AU: остаток новых активов и запас в последнем FCFF новых инвестиций (имеющиеся активы не входят).
+            i: _optional_finite(effect.cell(ORIGIN + i, 47).value, f"EFFECT.terminal[{i}]")
             for i in range(len(dates))
         },
     }
@@ -638,11 +651,23 @@ def _loan_tranches(wb) -> list[dict]:
     return tranches
 
 
+def _vat_factor(wb) -> float:
+    """Плательщик НДС платит CAPEX в ДДС с НДС: строки 19–20 «Предпосылок», колонка «Из анкеты»."""
+    sheet = wb[SHEET]
+    for column in range(1, sheet.max_column):
+        label = str(sheet.cell(20, column).value or "")
+        if label.startswith("Плательщик НДС"):
+            payer = sheet.cell(20, column + 1).value == 1
+            rate = sheet.cell(19, column + 1).value
+            return 1 + (float(rate) if payer and isinstance(rate, (int, float)) else 0.0)
+    return 1.0
+
+
 def _capex_register(wb) -> float | None:
     cap = wb[CAPEX]
     for r in range(2, 80):
         if str(cap.cell(r, 1).value or "") == "Итого":
-            return _finite(cap.cell(r, 13).value, "CAPEX.register_total")
+            return _finite(cap.cell(r, 13).value, "CAPEX.register_total") * _vat_factor(wb)
     return None
 
 
@@ -752,7 +777,7 @@ def evaluate_snapshot(snap: dict, *, kind: str = "main") -> list[Check]:
 
     # IRR / MIRR
     irr_res = xirr(series["fcff"], series["dates"])
-    irr_check = _irr_sheet_matches(irr_res, series["irr_sheet"])
+    irr_check = _irr_sheet_matches(irr_res, series["irr_sheet"], series["fcff"], series["dates"])
     irr_check.kind = kind
     checks.append(irr_check)
 
@@ -966,7 +991,7 @@ def evaluate_snapshot(snap: dict, *, kind: str = "main") -> list[Check]:
                 )
             )
             inv_irr = xirr(flow, series["dates"])
-            inv_check = _irr_sheet_matches(inv_irr, series["inv_irr_sheet"])
+            inv_check = _irr_sheet_matches(inv_irr, series["inv_irr_sheet"], flow, series["dates"])
             inv_check.name = inv_check.name.replace("irr_independent", "investor_irr_independent", 1)
             inv_check.kind = kind
             checks.append(inv_check)

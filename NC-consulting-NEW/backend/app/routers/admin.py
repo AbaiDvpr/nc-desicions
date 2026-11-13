@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Company, FinModel, LedgerEntry, RefillRequest, Tariff, User, UserTariff
+from app.models import AdminTask, Company, FinModel, LedgerEntry, RefillRequest, Tariff, User, UserTariff
 from app.security import clear_admin_cookie, get_current_admin, set_admin_cookie, verify_password
 from app.tariffs import ALMATY, assign_tariff, quota
 
@@ -383,3 +383,125 @@ def pay_refill(refill_id: int, _: User = Depends(get_current_admin), db: Session
         is_paid=refill.is_paid,
         created_at=refill.created_at,
     )
+
+
+TASK_COLUMNS = ("todo", "doing", "done")
+
+
+class TaskOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    note: str
+    column: str
+    position: int
+    created_at: datetime
+
+
+class TaskIn(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    note: str = Field(default="", max_length=2000)
+    column: str = "todo"
+
+
+class TaskPatch(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class TaskMove(BaseModel):
+    column: str
+    before_id: int | None = None
+
+
+def _tasks(db: Session) -> list[AdminTask]:
+    return list(db.scalars(select(AdminTask).order_by(AdminTask.position, AdminTask.id)))
+
+
+def _column_rows(db: Session, column: str) -> list[AdminTask]:
+    return [row for row in _tasks(db) if row.column == column]
+
+
+def _reindex(rows: list[AdminTask]) -> None:
+    for index, row in enumerate(rows):
+        row.position = index
+
+
+@router.get("/tasks", response_model=list[TaskOut])
+def list_tasks(_: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    return _tasks(db)
+
+
+@router.post("/tasks", response_model=TaskOut, status_code=status.HTTP_201_CREATED)
+def create_task(body: TaskIn, _: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    column = body.column if body.column in TASK_COLUMNS else "todo"
+    task = AdminTask(
+        title=body.title.strip(),
+        note=body.note.strip(),
+        column=column,
+        position=len(_column_rows(db, column)),
+    )
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+    return task
+
+
+@router.patch("/tasks/{task_id}", response_model=TaskOut)
+def update_task(
+    task_id: int,
+    body: TaskPatch,
+    _: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    task = db.get(AdminTask, task_id)
+    if task is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Задача не найдена")
+    if body.title is not None:
+        task.title = body.title.strip()
+    if body.note is not None:
+        task.note = body.note.strip()
+    db.commit()
+    db.refresh(task)
+    return task
+
+
+@router.put("/tasks/{task_id}/move", response_model=list[TaskOut])
+def move_task(
+    task_id: int,
+    body: TaskMove,
+    _: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    if body.column not in TASK_COLUMNS:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неизвестная колонка")
+    task = db.get(AdminTask, task_id)
+    if task is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Задача не найдена")
+    grouped = {column: _column_rows(db, column) for column in TASK_COLUMNS}
+    grouped[task.column] = [row for row in grouped[task.column] if row.id != task.id]
+    dest = grouped[body.column]
+    index = len(dest)
+    if body.before_id is not None and body.before_id != task.id:
+        found = next((at for at, row in enumerate(dest) if row.id == body.before_id), None)
+        if found is not None:
+            index = found
+    dest.insert(index, task)
+    task.column = body.column
+    for rows in grouped.values():
+        _reindex(rows)
+    db.commit()
+    return _tasks(db)
+
+
+@router.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_task(task_id: int, _: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    task = db.get(AdminTask, task_id)
+    if task is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Задача не найдена")
+    column = task.column
+    db.delete(task)
+    db.flush()
+    _reindex(_column_rows(db, column))
+    db.commit()

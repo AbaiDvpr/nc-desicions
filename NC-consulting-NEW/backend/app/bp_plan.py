@@ -7,11 +7,14 @@ import re
 from PIL import Image, ImageDraw, ImageFont
 from docx import Document
 from docx.enum.section import WD_SECTION
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt, RGBColor
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
+
+from app.currencies import MONEY
 
 MONTHS = (
     "",
@@ -47,7 +50,6 @@ LEGAL = {1: "ИП", 2: "ТОО"}
 FINANCING = {1: "Инвестор", 2: "Кредит", 3: "Грант", 4: "Инвестор и кредит"}
 TAX = {1: "общеустановленный режим", 4: "упрощённый режим"}
 UNITS = {1: "шт", 2: "кг", 3: "тонн", 4: "усл", 5: "м²", 6: "м³", 7: "л", 8: "м.п.", 9: "км", 10: "чел.", 11: "ед."}
-MONEY = {"kzt": ("тенге", "₸"), "usd": ("доллар США", "$"), "eur": ("евро", "€")}
 INVEST = (
     ("smr", "Работы СМР и капитальный ремонт", "capex"),
     ("overhaul", "Материалы СМР и капитального ремонта", "capex"),
@@ -71,6 +73,7 @@ SANS = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 SANS_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 SERIF = "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf"
 SERIF_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf"
+MOSAIC_HEAD = "DAEEF3"
 
 
 def _num(value) -> float:
@@ -250,7 +253,14 @@ def _block(kind: str, *payload) -> tuple:
     return (kind, *payload)
 
 
-def assemble(form: dict, template=None, answers: dict | None = None, results: dict | None = None) -> dict:
+def assemble(
+    form: dict,
+    template=None,
+    answers: dict | None = None,
+    results: dict | None = None,
+    images: list[dict] | None = None,
+    profile: dict | None = None,
+) -> dict:
     form = form or {}
     sign = _sign(form)
     monthly = int(form.get("time_param") or 3) != 1
@@ -490,8 +500,10 @@ def assemble(form: dict, template=None, answers: dict | None = None, results: di
         if monthly
         else "Объём в анкете задан за год. В таблице месяц — это двенадцатая часть, чтобы сверить расходы, которые идут каждый месяц."
     )
+    company = str((profile or {}).get("company_name") or "").strip()
     facts = {
         "name": str(form.get("name") or "Проект"),
+        "company": company,
         "legal": LEGAL.get(int(form.get("legal_form") or 0), "не указано"),
         "financing_code": financing,
         "financing": FINANCING.get(financing, "не указано"),
@@ -561,10 +573,16 @@ def assemble(form: dict, template=None, answers: dict | None = None, results: di
     accent = str((getattr(template, "accent", None) or "#1e3a5f") if template else "#1e3a5f").lstrip("#").upper()
     if len(accent) != 6:
         accent = "1E3A5F"
+    if cover == "mosaic":
+        from app.bp_mosaic_sections import mosaic_sections
+
+        sections = mosaic_sections(facts, form, answers or {}, results, profile, images or [])
+    else:
+        sections = _sections(facts, form, answers or {}, template, results, images or [])
     return {
         "facts": facts,
-        "sections": _sections(facts, form, answers or {}, template, results),
-        "cover": cover if cover in ("classic", "investor", "brief", "book") else "classic",
+        "sections": sections,
+        "cover": cover if cover in ("classic", "investor", "brief", "book", "mosaic", "growth") else "classic",
         "accent": accent,
         "style_name": getattr(template, "name", "") if template else "",
         "prepared": _today(),
@@ -761,7 +779,14 @@ def _result_blocks(form: dict, results: dict, facts: dict) -> list:
     ]
 
 
-def _sections(facts: dict, form: dict, answers: dict | None = None, template=None, results: dict | None = None) -> list[tuple]:
+def _sections(
+    facts: dict,
+    form: dict,
+    answers: dict | None = None,
+    template=None,
+    results: dict | None = None,
+    images: list[dict] | None = None,
+) -> list[tuple]:
     money = lambda value: _money(form, value)
     profile = _profile(template)
     answers = answers or {}
@@ -1057,12 +1082,16 @@ def _sections(facts: dict, form: dict, answers: dict | None = None, template=Non
         "costs": ["operations"],
         "close": ["summary"],
     }
+    images = images or []
+    if any(item["section"] == "appendices" for item in images) and not any(key == "appendices" for key, _t, _b in pieces):
+        add("appendices", "Приложения", [])
     numbered = []
     for index, (key, title, blocks) in enumerate(pieces, start=1):
         extra = []
         for item in attach.get(key, []):
             extra.extend(_prose(answers, item))
-        numbered.append((index, title, [*blocks, *extra]))
+        pictures = [_block("image", item["data"], item["ratio"], item["caption"]) for item in images if item["section"] == key]
+        numbered.append((index, title, [*blocks, *extra, *pictures]))
     contents = (
         0,
         "Содержание",
@@ -1397,7 +1426,175 @@ def _book_kpis(plan: dict) -> list[tuple[str, str]]:
     return rows
 
 
+GROWTH_NAVY = (16, 40, 72)
+GROWTH_NAVY_DARK = (10, 26, 48)
+GROWTH_GOLD = (184, 148, 74)
+GROWTH_GOLD_LIGHT = (214, 186, 122)
+GROWTH_GOLD_DEEP = (150, 116, 52)
+GROWTH_INK = (16, 32, 56)
+GROWTH_MUTED = (96, 108, 124)
+GROWTH_TITLE_PT = 44
+
+
+def _pt(size: float) -> int:
+    """Пункт в пиксели обложки: лист A4 рисуется в 150 точках на дюйм."""
+    return max(1, round(size * 150 / 72))
+
+
+def _growth_date(plan: dict) -> str:
+    text = str(plan.get("prepared") or "")
+    parts = text.split()
+    if len(parts) == 3 and parts[0].isdigit() and parts[2].isdigit():
+        month = next((index for index, name in enumerate(MONTHS_GEN) if name == parts[1]), 0)
+        if month:
+            return f"{int(parts[0]):02d}.{month:02d}.{parts[2]}"
+    current = date.today()
+    return f"{current.day:02d}.{current.month:02d}.{current.year}"
+
+
+def _quad(start: tuple, control: tuple, end: tuple, steps: int = 36) -> list[tuple]:
+    points = []
+    for step in range(steps + 1):
+        t = step / steps
+        points.append(
+            (
+                (1 - t) ** 2 * start[0] + 2 * (1 - t) * t * control[0] + t ** 2 * end[0],
+                (1 - t) ** 2 * start[1] + 2 * (1 - t) * t * control[1] + t ** 2 * end[1],
+            )
+        )
+    return points
+
+
+def _arrow_head(tip: tuple, prev: tuple, length: float = 34, spread: float = 16) -> list[tuple]:
+    dx, dy = tip[0] - prev[0], tip[1] - prev[1]
+    dist = (dx * dx + dy * dy) ** 0.5 or 1
+    ux, uy = dx / dist, dy / dist
+    px, py = -uy * spread, ux * spread
+    base = (tip[0] - ux * length, tip[1] - uy * length)
+    return [tip, (base[0] + px, base[1] + py), (base[0] - px, base[1] - py)]
+
+
+def _growth_cover_png(plan: dict) -> bytes:
+    width, height = 1240, 1754
+    image = Image.new("RGB", (width, height), (255, 255, 255))
+    draw = ImageDraw.Draw(image)
+    # Верхний угол: тёмная полоса и основной треугольник с одной и той же диагональю.
+    draw.polygon([(860, 0), (width, 0), (width, 420)], fill=GROWTH_NAVY)
+    draw.polygon([(1088, 0), (width, 0), (width, 168)], fill=GROWTH_NAVY_DARK)
+    draw.line((860, 0, width, 420), fill=GROWTH_GOLD, width=4)
+    # Нижний угол: та же диагональ у заливки и у золотой линии.
+    draw.polygon([(0, height), (0, 1548), (330, height)], fill=GROWTH_NAVY)
+    draw.polygon([(0, height), (0, 1648), (170, height)], fill=GROWTH_NAVY_DARK)
+    draw.line((0, 1548, 330, height), fill=GROWTH_GOLD, width=4)
+
+    city = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    city_draw = ImageDraw.Draw(city)
+    skyline_base = 1320
+    for left, top, right in (
+        (760, 980, 820),
+        (830, 860, 910),
+        (920, 740, 1020),
+        (1030, 900, 1110),
+        (1120, 800, 1210),
+    ):
+        city_draw.rectangle((left, top, right, skyline_base), fill=(198, 214, 228, 150))
+    image.paste(Image.alpha_composite(image.convert("RGBA"), city).convert("RGB"))
+    draw = ImageDraw.Draw(image)
+
+    bars = (110, 190, 290, 400)
+    base = 1390
+    left0, bar_w, gap, depth = 820, 72, 28, 14
+    for index, bar_h in enumerate(bars):
+        left = left0 + index * (bar_w + gap)
+        top = base - bar_h
+        draw.polygon(
+            [(left, top), (left + depth, top - depth), (left + bar_w + depth, top - depth), (left + bar_w, top)],
+            fill=GROWTH_GOLD_LIGHT,
+        )
+        draw.polygon(
+            [
+                (left + bar_w, top),
+                (left + bar_w + depth, top - depth),
+                (left + bar_w + depth, base - depth),
+                (left + bar_w, base),
+            ],
+            fill=GROWTH_GOLD_DEEP,
+        )
+        draw.rectangle((left, top, left + bar_w, base), fill=GROWTH_GOLD)
+    draw.line((left0, base, left0 + 4 * bar_w + 3 * gap + depth, base), fill=(226, 230, 234), width=2)
+    arrow = _quad((760, 1320), (1000, 1080), (1210, 900))
+    draw.line(arrow[:-3], fill=GROWTH_GOLD, width=6)
+    draw.polygon(_arrow_head(arrow[-1], arrow[-6]), fill=GROWTH_GOLD)
+
+    label = ImageFont.truetype(SANS_BOLD, _pt(13))
+    name_font = ImageFont.truetype(SANS, _pt(12))
+    title = ImageFont.truetype(SERIF_BOLD, _pt(GROWTH_TITLE_PT))
+    project_font = ImageFont.truetype(SERIF, _pt(22))
+    meta_label = ImageFont.truetype(SANS_BOLD, _pt(12))
+    meta_value = ImageFont.truetype(SANS, _pt(12))
+    foot = ImageFont.truetype(SANS, _pt(11))
+    facts = plan["facts"]
+    company = str(facts.get("company") or "").strip() or "—"
+    draw.line((78, 86, 78, 168), fill=GROWTH_GOLD, width=3)
+    draw.text((98, 84), "Компания", font=label, fill=GROWTH_INK)
+    y = 118
+    for line in _wrap_name(draw, company, name_font, 520):
+        draw.text((98, y), line, font=name_font, fill=GROWTH_MUTED)
+        y += _pt(15)
+    draw.text((78, 250), "Бизнес-план", font=title, fill=GROWTH_INK)
+    title_box = draw.textbbox((78, 250), "Бизнес-план", font=title)
+    draw.rectangle((78, title_box[3] + 16, 250, title_box[3] + 22), fill=GROWTH_GOLD)
+    y = title_box[3] + 40
+    for line in _wrap_name(draw, str(facts.get("name") or "Проект"), project_font, 620):
+        draw.text((78, y), line, font=project_font, fill=GROWTH_INK)
+        y += _pt(28)
+    y += 28
+    for caption, value, icon in (
+        ("Компания:", company, "building"),
+        ("Дата:", _growth_date(plan), "date"),
+    ):
+        _growth_icon(draw, icon, 86, y, GROWTH_GOLD)
+        draw.line((138, y + 4, 138, y + 52), fill=GROWTH_GOLD, width=2)
+        draw.text((156, y), caption, font=meta_label, fill=GROWTH_INK)
+        draw.text((156, y + 24), value, font=meta_value, fill=GROWTH_MUTED)
+        y += 78
+
+    footer = "Бизнес-план  •  Конфиденциально"
+    footer_w = draw.textlength(footer, font=foot)
+    footer_x = (width - footer_w) / 2
+    footer_y = height - 78
+    draw.line((160, footer_y + 8, footer_x - 16, footer_y + 8), fill=GROWTH_GOLD, width=2)
+    draw.line((footer_x + footer_w + 16, footer_y + 8, width - 160, footer_y + 8), fill=GROWTH_GOLD, width=2)
+    draw.text((footer_x, footer_y), footer, font=foot, fill=GROWTH_MUTED)
+    buffer = BytesIO()
+    image.save(buffer, "PNG")
+    return buffer.getvalue()
+
+
+def _growth_icon(draw: ImageDraw.ImageDraw, kind: str, x: int, y: int, color: tuple) -> None:
+    if kind == "building":
+        draw.polygon([(x + 4, y + 18), (x + 22, y + 4), (x + 40, y + 18)], outline=color)
+        draw.rectangle((x + 8, y + 18, x + 36, y + 46), outline=color, width=2)
+        draw.rectangle((x + 18, y + 30, x + 26, y + 46), outline=color, width=2)
+        return
+    draw.rounded_rectangle((x + 6, y + 10, x + 40, y + 46), radius=4, outline=color, width=2)
+    draw.line((x + 6, y + 22, x + 40, y + 22), fill=color, width=2)
+    draw.line((x + 16, y + 6, x + 16, y + 16), fill=color, width=2)
+    draw.line((x + 30, y + 6, x + 30, y + 16), fill=color, width=2)
+
+
+def _growth_cover_docx(doc: Document, plan: dict) -> None:
+    paragraph = doc.add_paragraph()
+    _tight(paragraph)
+    run = paragraph.add_run()
+    run.add_picture(BytesIO(_growth_cover_png(plan)), width=Cm(21), height=Cm(29.7))
+
+
 def render_docx(plan: dict) -> bytes:
+    if plan["cover"] == "mosaic":
+        from app.bp_mosaic import render_mosaic_docx
+
+        return render_mosaic_docx(plan)
     cover = plan["cover"]
     accent = plan["accent"]
     font = "Times New Roman" if cover == "classic" else "Calibri"
@@ -1422,6 +1619,15 @@ def render_docx(plan: dict) -> bytes:
         content.left_margin = Cm(1.7)
         content.right_margin = Cm(1.7)
         _book_metrics_docx(doc, plan, font, accent)
+    elif cover == "growth":
+        for margin in ("top_margin", "bottom_margin", "left_margin", "right_margin"):
+            setattr(section, margin, Cm(0))
+        _growth_cover_docx(doc, plan)
+        content = doc.add_section(WD_SECTION.NEW_PAGE)
+        content.top_margin = Cm(1.6)
+        content.bottom_margin = Cm(1.6)
+        content.left_margin = Cm(1.7)
+        content.right_margin = Cm(1.7)
     else:
         section.top_margin = Cm(1.6)
         section.bottom_margin = Cm(1.6)
@@ -1523,40 +1729,63 @@ def _cover(doc: Document, plan: dict, font: str, accent: str) -> None:
         _edge(paragraph, "left", accent, "24")
 
 
-def _docx_block(doc: Document, block: tuple, font: str, accent: str) -> None:
+def _body_paragraph(paragraph, look: dict | None):
+    if look and look.get("justify"):
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        paragraph.paragraph_format.first_line_indent = Cm(1.25)
+        paragraph.paragraph_format.line_spacing = 1.15
+    return paragraph
+
+
+def _docx_block(doc: Document, block: tuple, font: str, accent: str, look: dict | None = None) -> None:
     kind = block[0]
+    size = (look or {}).get("size", 11)
     if kind == "p":
-        _run_paragraph(doc, block[1], font, 11, "1C1915", after=6)
+        _body_paragraph(_run_paragraph(doc, block[1], font, size, "1C1915", after=6), look)
     elif kind == "rich":
-        paragraph = doc.add_paragraph()
+        paragraph = _body_paragraph(doc.add_paragraph(), look)
         paragraph.paragraph_format.space_before = Pt(0)
         paragraph.paragraph_format.space_after = Pt(6)
         for text, bold in block[1]:
-            _paint(paragraph.add_run(_plain(text)), font, 11, "1C1915", bold)
+            _paint(paragraph.add_run(_plain(text)), font, size, "1C1915", bold)
     elif kind == "warn":
-        _run_paragraph(doc, block[1], font, 11, "9D2222", True, after=6)
+        _body_paragraph(_run_paragraph(doc, block[1], font, size, "9D2222", True, after=6), look)
     elif kind == "miss":
-        _run_paragraph(doc, block[1], font, 11, "6D665C", after=6)
+        _body_paragraph(_run_paragraph(doc, block[1], font, size, "6D665C", after=6), look)
     elif kind == "h":
         paragraph = doc.add_heading(block[1], level=2)
         paragraph.paragraph_format.space_before = Pt(10)
         paragraph.paragraph_format.space_after = Pt(4)
+    elif kind == "image":
+        data, ratio, caption = block[1], block[2], block[3]
+        width = min(16.0, 18.0 / ratio)
+        paragraph = doc.add_paragraph()
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        paragraph.paragraph_format.space_before = Pt(6)
+        paragraph.paragraph_format.space_after = Pt(2 if caption else 8)
+        paragraph.add_run().add_picture(BytesIO(data), width=Cm(width))
+        if caption:
+            note = _run_paragraph(doc, caption, font, 10, "6D665C", after=8)
+            note.alignment = WD_ALIGN_PARAGRAPH.CENTER
     elif kind == "table":
         headers, rows = block[1], block[2]
+        look = look or {}
+        cell_size = look.get("cell", 8)
         table = doc.add_table(rows=1 + len(rows), cols=len(headers))
         table.style = "Table Grid"
-        usable = 17.6
-        _lock_table(table, _col_widths(usable, len(headers)))
+        usable = look.get("usable", 17.6)
+        shares = block[3] if len(block) > 3 and block[3] and len(block[3]) == len(headers) else None
+        _lock_table(table, [usable * share for share in shares] if shares else _col_widths(usable, len(headers)))
         for index, header in enumerate(headers):
-            _cell(table.rows[0].cells[index], header, font, 8, True, accent, "FFFFFF")
+            _cell(table.rows[0].cells[index], header, font, cell_size, True, look.get("head_fill", accent), look.get("head_color", "FFFFFF"))
         tr_pr = table.rows[0]._tr.get_or_add_trPr()
         repeat = OxmlElement("w:tblHeader")
         tr_pr.append(repeat)
         for r_index, row in enumerate(rows, start=1):
-            fill = "F7F8FB" if r_index % 2 == 0 else "FFFFFF"
+            fill = "F7F8FB" if r_index % 2 == 0 and look.get("zebra", True) else "FFFFFF"
             padded = list(row) + [""] * (len(headers) - len(row))
             for c_index, value in enumerate(padded[: len(headers)]):
-                _cell(table.rows[r_index].cells[c_index], value, font, 8, False, fill, "1C1915")
+                _cell(table.rows[r_index].cells[c_index], value, font, cell_size, False, fill, "1C1915")
         doc.add_paragraph()
 
 
@@ -1658,11 +1887,16 @@ class _Pdf(FPDF):
     def __init__(self, plan: dict):
         super().__init__(format="A4", unit="mm")
         self.plan = plan
-        serif = plan["cover"] == "classic"
+        serif = plan["cover"] in ("classic", "mosaic")
         self.add_font("Body", "", SERIF if serif else SANS)
         self.add_font("Body", "B", SERIF_BOLD if serif else SANS_BOLD)
         self.set_auto_page_break(True, 18)
         self.accent = _pdf_color(plan["accent"])
+        mosaic = plan["cover"] == "mosaic"
+        self.head_fill = _pdf_color(MOSAIC_HEAD) if mosaic else self.accent
+        self.head_text = (0, 0, 0) if mosaic else (255, 255, 255)
+        self.grid = (0, 0, 0) if mosaic else (220, 224, 232)
+        self.zebra = not mosaic
         self.alias_nb_pages()
 
     def header(self):
@@ -1679,7 +1913,13 @@ class _Pdf(FPDF):
         self.line(16, 15, 194, 15)
 
     def footer(self):
-        if self.plan.get("cover") == "book" and self.page_no() == 1:
+        if self.plan.get("cover") in ("book", "mosaic", "growth") and self.page_no() == 1:
+            return
+        if self.plan.get("cover") == "mosaic":
+            self.set_y(-14)
+            self.set_font("Body", "", 10)
+            self.set_text_color(0, 0, 0)
+            self.cell(0, 6, str(self.page_no()), align="C")
             return
         self.set_y(-12)
         self.set_font("Body", "", 8)
@@ -1696,6 +1936,10 @@ def _pdf_write(pdf: _Pdf, height: float, text: str, size: int = 10, bold: bool =
 
 
 def render_pdf(plan: dict) -> bytes:
+    if plan["cover"] == "mosaic":
+        from app.bp_mosaic import render_mosaic_pdf
+
+        return render_mosaic_pdf(plan)
     pdf = _Pdf(plan)
     book = plan["cover"] == "book"
     pdf.set_margins(16 if book else 14, 20 if book else 14, 16 if book else 14)
@@ -1704,6 +1948,9 @@ def render_pdf(plan: dict) -> bytes:
         _pdf_book_cover(pdf, plan)
         pdf.add_page()
         _pdf_book_metrics(pdf, plan)
+    elif plan["cover"] == "growth":
+        _pdf_growth_cover(pdf, plan)
+        pdf.add_page()
     else:
         _pdf_cover(pdf, plan)
     for number, title, blocks in plan["sections"]:
@@ -1722,6 +1969,28 @@ def _pdf_place(pdf: _Pdf, png: bytes, ratio: float) -> None:
     y = pdf.get_y()
     pdf.image(BytesIO(png), x=pdf.l_margin, y=y, w=pdf.epw, h=height)
     pdf.set_xy(pdf.l_margin, y + height + 3)
+
+
+def _pdf_picture(pdf: _Pdf, data: bytes, ratio: float, caption: str) -> None:
+    width = min(pdf.epw, 180 / ratio, 160)
+    height = width * ratio
+    room = height + (8 if caption else 3)
+    if pdf.get_y() + room > pdf.page_break_trigger:
+        pdf.add_page()
+    y = pdf.get_y() + 2
+    pdf.image(BytesIO(data), x=pdf.l_margin + (pdf.epw - width) / 2, y=y, w=width, h=height)
+    pdf.set_xy(pdf.l_margin, y + height + 2)
+    if caption:
+        pdf.set_font("Body", "", 9)
+        pdf.set_text_color(109, 102, 92)
+        pdf.multi_cell(pdf.epw, 4.5, _plain(caption), align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.ln(2)
+
+
+def _pdf_growth_cover(pdf: _Pdf, plan: dict) -> None:
+    pdf.set_auto_page_break(False)
+    pdf.image(BytesIO(_growth_cover_png(plan)), x=0, y=0, w=210, h=297)
+    pdf.set_auto_page_break(True, 18)
 
 
 def _pdf_book_cover(pdf: _Pdf, plan: dict) -> None:
@@ -1822,8 +2091,11 @@ def _pdf_block(pdf: _Pdf, block: tuple) -> None:
         pdf.ln(1)
         _pdf_write(pdf, 6, block[1], 12, True, pdf.accent)
         return
+    if kind == "image":
+        _pdf_picture(pdf, block[1], block[2], block[3])
+        return
     headers, rows = block[1], block[2]
-    _pdf_table(pdf, headers, rows)
+    _pdf_table(pdf, headers, rows, block[3] if len(block) > 3 else None)
 
 
 def _col_widths(total: float, count: int) -> list[float]:
@@ -1840,12 +2112,15 @@ def _col_widths(total: float, count: int) -> list[float]:
     return [first, *([rest] * (count - 1))]
 
 
-def _pdf_table(pdf: _Pdf, headers: list[str], rows: list[list[str]]) -> None:
-    widths = _col_widths(pdf.epw, len(headers))
+def _pdf_table(pdf: _Pdf, headers: list[str], rows: list[list[str]], shares: list[float] | None = None) -> None:
+    if shares and len(shares) == len(headers):
+        widths = [pdf.epw * share for share in shares]
+    else:
+        widths = _col_widths(pdf.epw, len(headers))
     header_cells = [_plain(item) for item in headers]
 
     def paint_header() -> None:
-        _pdf_row(pdf, header_cells, widths, bold=True, fill=pdf.accent, color=(255, 255, 255))
+        _pdf_row(pdf, header_cells, widths, bold=True, fill=pdf.head_fill, color=pdf.head_text)
 
     paint_header()
     for index, row in enumerate(rows):
@@ -1856,7 +2131,7 @@ def _pdf_table(pdf: _Pdf, headers: list[str], rows: list[list[str]]) -> None:
         if pdf.get_y() + height > pdf.page_break_trigger:
             pdf.add_page()
             paint_header()
-        fill = (247, 248, 251) if index % 2 else (255, 255, 255)
+        fill = (247, 248, 251) if index % 2 and pdf.zebra else (255, 255, 255)
         _pdf_row(pdf, cells[: len(headers)], widths, fill=fill, color=(28, 25, 21))
     pdf.ln(2)
 
@@ -1895,7 +2170,7 @@ def _pdf_row(pdf: _Pdf, cells: list[str], widths: list[float], bold: bool = Fals
     pdf.set_font("Body", "B" if bold else "", 8)
     pdf.set_text_color(*color)
     pdf.set_fill_color(*fill)
-    pdf.set_draw_color(220, 224, 232)
+    pdf.set_draw_color(*pdf.grid)
     pdf.set_auto_page_break(False)
     x0, y0 = pdf.l_margin, pdf.get_y()
     x = x0

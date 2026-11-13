@@ -1,11 +1,22 @@
 import json
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.audit_export import build_audit_payload
+from app.bp_images import (
+    MAX_PER_MODEL as BP_IMAGE_LIMIT,
+    SECTIONS as BP_IMAGE_SECTIONS,
+    add_image,
+    clean_section,
+    image_path as bp_image_path,
+    image_payload,
+    list_images,
+    remove_image,
+)
 from app.bp_jobs import (
     AttemptLimit,
     NothingToRetry,
@@ -22,13 +33,14 @@ from app.bp_jobs import (
     start_job,
     start_review,
 )
+from app.bp_profile import profile_state, save_profile
 from app.database import get_db
 from app.excel_report import build_fin_model_excel
 from app.fem_v2 import build_fem_v2_excel
 from app.fem_v3_book import build_fem_v3_excel
 from app.fem_v4_book import build_fem_v4_excel
 from app.fem_v5_book import build_fem_v5_excel
-from app.models import BpJob, BpTemplate, FinModel, User
+from app.models import BpImage, BpJob, BpTemplate, FinModel, User
 from app.project_form import ZERO_COGS_MESSAGE, ProjectFormIn, card_facts, to_fin_model, zero_cogs_state
 from app.schemas import DraftIn, DraftOut, FinModelData, FinModelDetail, FinModelOut, FinModelPage
 from app.security import get_current_user
@@ -430,6 +442,112 @@ def _report_file(model_id: int, template_id: int | None, job_id: int | None, use
     )
     form = _ready_form(model)
     return model, job, form, template, slug, number
+
+
+@router.get("/{model_id}/bp-profile")
+def get_bp_profile(
+    model_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    model = _get_active(db, user, model_id)
+    return profile_state(db, user.id, model.id)
+
+
+@router.put("/{model_id}/bp-profile")
+def put_bp_profile(
+    model_id: int,
+    body: dict,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    model = _get_active(db, user, model_id)
+    return save_profile(db, user.id, model.id, body)
+
+
+class BpImageIn(BaseModel):
+    section: str | None = None
+    caption: str | None = Field(default=None, max_length=200)
+
+
+def _owned_image(db: Session, model: FinModel, image_id: int) -> BpImage:
+    image = db.get(BpImage, image_id)
+    if image is None or image.fin_model_id != model.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Картинка не найдена")
+    return image
+
+
+@router.get("/{model_id}/bp-images")
+def list_bp_images(
+    model_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    model = _get_active(db, user, model_id)
+    return {
+        "items": [image_payload(item) for item in list_images(db, model.id)],
+        "sections": [{"key": key, "title": title} for key, title in BP_IMAGE_SECTIONS.items()],
+        "limit": BP_IMAGE_LIMIT,
+    }
+
+
+@router.post("/{model_id}/bp-images")
+async def upload_bp_image(
+    model_id: int,
+    file: UploadFile = File(...),
+    section: str = Form("appendices"),
+    caption: str = Form("", max_length=200),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    model = _get_active(db, user, model_id)
+    image = add_image(db, user.id, model.id, await file.read(), clean_section(section), caption.strip())
+    return image_payload(image)
+
+
+@router.patch("/{model_id}/bp-images/{image_id}")
+def update_bp_image(
+    model_id: int,
+    image_id: int,
+    body: BpImageIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    model = _get_active(db, user, model_id)
+    image = _owned_image(db, model, image_id)
+    if body.section is not None:
+        image.section = clean_section(body.section)
+    if body.caption is not None:
+        image.caption = body.caption.strip()
+    db.commit()
+    db.refresh(image)
+    return image_payload(image)
+
+
+@router.delete("/{model_id}/bp-images/{image_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_bp_image(
+    model_id: int,
+    image_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    model = _get_active(db, user, model_id)
+    remove_image(db, _owned_image(db, model, image_id))
+
+
+@router.get("/{model_id}/bp-images/{image_id}/file")
+def bp_image_file(
+    model_id: int,
+    image_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    model = _get_active(db, user, model_id)
+    image = _owned_image(db, model, image_id)
+    path = bp_image_path(image.id)
+    if not path.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Файл не найден")
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
 
 
 @router.get("/{model_id}/report.docx")

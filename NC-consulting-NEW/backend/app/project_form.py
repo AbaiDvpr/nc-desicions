@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.currencies import CODE_PATTERN, iso
 from app.schemas import (
     AssetIn,
     CompanyIn,
@@ -219,7 +220,7 @@ class ProjectFormIn(BaseModel):
     osms_rate: Num = 0
     vosms_rate: Num = 0
     social_tax_rate: Num = 0
-    currency: str = Field(pattern=r"^(kzt|usd|eur)$")
+    currency: str = Field(pattern=CODE_PATTERN)
     time_param: int = Field(ge=1, le=3)
     schedule: int = Field(ge=1, le=3)
     planning_from: str = Month
@@ -258,6 +259,8 @@ class ProjectFormIn(BaseModel):
     smr: list[AssetRow] = Field(default_factory=list, max_length=30)
     overhaul: list[AssetRow] = Field(default_factory=list, max_length=30)
     inventory: list[InventoryRow] = Field(default_factory=list, max_length=30)
+    # Согласованная оценка уже имеющихся активов (вклад имуществом). Пусто — балансовая, «не подтверждена».
+    owned_assets_value: float | None = Field(default=None, ge=0)
 
     cost_mode: str = Field(pattern=r"^(unit|monthly)$")
     variable_costs: list[VariableCostIn] = Field(default_factory=list, max_length=30)
@@ -305,6 +308,15 @@ class ProjectFormIn(BaseModel):
     def other_income_month(cls, value: str) -> str:
         return _month_or_blank(value, "Дата начала прочих доходов должна быть месяцем")
 
+    @field_validator("owned_assets_value", mode="before")
+    @classmethod
+    def blank_owned_value(cls, value):
+        if value in ("", None):
+            return None
+        if isinstance(value, str):
+            value = value.replace(" ", "").replace("\u00a0", "").replace(",", ".")
+        return value
+
     @model_validator(mode="after")
     def check_form(self):
         if self.planning_to < self.planning_from:
@@ -319,6 +331,9 @@ class ProjectFormIn(BaseModel):
             raise ValueError("Загрузка в первый месяц продаж — от 0% до 100%")
         if self.sales_start == self.planned_volume:
             self.sales_start_load = 100
+        owned = [row for group in (self.equipment, self.premises, self.smr, self.overhaul) for row in group if row.already_owned and row.name.strip()]
+        if not owned:
+            self.owned_assets_value = None
         for row in self.salary:
             if row.name.strip() and row.industrial is None:
                 raise ValueError(f"Выберите тип персонала для «{row.name.strip()}»: производственный или административный")
@@ -830,7 +845,7 @@ def to_fin_model(form: ProjectFormIn) -> FinModelData:
         company=CompanyIn(
             name=form.name,
             legal_form="ИП" if form.legal_form == 1 else "ТОО",
-            currency={"kzt": "KZT", "usd": "USD", "eur": "EUR"}[form.currency],
+            currency=iso(form.currency),
             start_date=form.planning_from,
             horizon_months=months_between(form.planning_from, form.planning_to),
             tax_regime="general" if form.tax_regime == 1 else "simplified",

@@ -8,8 +8,9 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.bp_templates import DEFAULT_MODEL, DEFAULT_PROVIDER, model_label, provider_for_model
+from app.bp_templates import DEFAULT_MODEL, DEFAULT_PROVIDER, model_label, provider_for_model, task_title
 from app.config import settings
+from app.currencies import MONEY
 from app.database import SessionLocal
 from app.models import BpJob, BpJobTask, BpSetting, BpTemplate, FinModel, User
 
@@ -22,11 +23,6 @@ FINANCING = {
 }
 TAX = {1: "общеустановленный", 4: "упрощённый"}
 UNITS = {1: "шт", 2: "кг", 3: "тонн", 4: "усл", 5: "м2", 6: "м3", 7: "л", 8: "м.п.", 9: "км", 10: "чел.", 11: "ед."}
-MONEY = {
-    "kzt": ("тенге", "₸"),
-    "usd": ("доллар США", "$"),
-    "eur": ("евро", "€"),
-}
 INVEST = (
     ("smr", "Работы СМР и капитальный ремонт"),
     ("overhaul", "Материалы СМР и капитального ремонта"),
@@ -197,8 +193,8 @@ def ask_model(model_name: str, method: str, case: str, provider: str | None = No
                     "Не выдумывай адрес, лицензии, объём рынка, конкурентов, CAC, NPV и другие цифры. "
                     "Каждое предложение опирается на цифру, название или срок из кейса. Общую фразу без такой опоры не пиши. "
                     "Если результат месяца до налога положительный, не пиши, что проект убыточен и что дивиденды не из чего платить. "
-                    "Деньги пиши знаком из кейса: тенге — ₸, доллар — $, евро — €. "
-                    "Коды KZT, USD и EUR не используй. Названия статей оставляй по-русски. Проверки в конце кейса не сглаживай. "
+                    "Деньги пиши знаком из кейса: тенге — ₸, доллар — $, евро — €, рубль — ₽, сум — сум, сом — сом, сомони — смн, дирхам — Dh. "
+                    "Коды валют не используй. Названия статей оставляй по-русски. Проверки в конце кейса не сглаживай. "
                     "Пиши обычным текстом: без решёток, звёздочек и других знаков разметки."
                 ),
             },
@@ -430,7 +426,9 @@ def start_job(db: Session, user: User, model: FinModel, template_id: int | None,
     setting = db.get(BpSetting, 1)
     model_name = setting.model if setting and provider_for_model(setting.model) else DEFAULT_MODEL
     provider = provider_for_model(model_name) or DEFAULT_PROVIDER
-    brief = case_brief(model.data or {})
+    from app.bp_profile import get_profile, profile_case
+
+    brief = "\n\n".join(part for part in (case_brief(model.data or {}), profile_case(get_profile(db, model.id))) if part)
     job = BpJob(
         user_id=user.id,
         fin_model_id=model.id,
@@ -443,6 +441,7 @@ def start_job(db: Session, user: User, model: FinModel, template_id: int | None,
     )
     db.add(job)
     db.flush()
+    financing = int((model.data or {}).get("financing") or 0)
     for index, section in enumerate(template.sections or []):
         source = section.get("source") or "ai"
         method = section.get("prompt") or ""
@@ -453,7 +452,7 @@ def start_job(db: Session, user: User, model: FinModel, template_id: int | None,
                 job_id=job.id,
                 position=index,
                 key=str(section.get("key") or f"s{index}"),
-                title=str(section.get("title") or "Раздел"),
+                title=task_title(section, financing),
                 source=source,
                 method=method,
                 status="queued",
@@ -683,9 +682,18 @@ def _plan(db: Session, job: BpJob, form: dict, template: BpTemplate | None):
         for task in tasks
         if task.source == "ai" and task.status == "done" and (task.answer or "").strip()
     }
+    from app.bp_images import plan_images
+    from app.bp_profile import get_profile
     from app.fem_values import read_statements
 
-    return assemble(form, template, answers, read_statements(form))
+    return assemble(
+        form,
+        template,
+        answers,
+        read_statements(form),
+        plan_images(db, job.fin_model_id),
+        get_profile(db, job.fin_model_id),
+    )
 
 
 def render_job(db: Session, job: BpJob, form: dict, template: BpTemplate | None = None) -> bytes:

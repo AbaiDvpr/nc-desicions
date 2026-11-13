@@ -56,6 +56,11 @@ def ensure_schema() -> None:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE fin_models ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT false"))
 
+    company_columns = {column["name"] for column in inspect(engine).get_columns("companies")}
+    if "bp_data" not in company_columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE companies ADD COLUMN bp_data JSONB NOT NULL DEFAULT '{}'::jsonb"))
+
     if inspect(engine).has_table("bp_jobs"):
         job_columns = {column["name"] for column in inspect(engine).get_columns("bp_jobs")}
         if "provider" not in job_columns:

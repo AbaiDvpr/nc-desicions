@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.bp_profile import clean_company, company_defaults
 from app.database import get_db
 from app.security import get_current_user
 from app.models import Company, CompanyRequisite, Counterparty, User
@@ -121,6 +122,25 @@ def update_company(
     db.commit()
     db.refresh(company)
     return company
+
+
+@router.get("/companies/{company_id}/bp-profile")
+def get_company_bp(company_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    company = _company_or_404(db, user, company_id)
+    return {"data": clean_company(company.bp_data), "defaults": company_defaults(db, company)}
+
+
+@router.put("/companies/{company_id}/bp-profile")
+def put_company_bp(
+    company_id: int,
+    body: dict,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    company = _company_or_404(db, user, company_id)
+    company.bp_data = clean_company(body)
+    db.commit()
+    return {"data": company.bp_data, "defaults": company_defaults(db, company)}
 
 
 @router.get("/companies/{company_id}/requisites", response_model=list[RequisiteOut])

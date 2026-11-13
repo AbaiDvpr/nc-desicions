@@ -10,6 +10,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.worksheet.worksheet import Worksheet
 
+from app.currencies import in_phrase
 from app.models import User
 from app.schemas import AssetIn, FinModelData
 
@@ -150,7 +151,7 @@ class _ModelWriter:
             start = (today.year + today.month // 12, today.month % 12 + 1)
         self.start_year, self.start_month = start
         self.now = datetime.now(LOCAL_TZ).strftime("%d.%m.%Y %H:%M")
-        currency = {"KZT": "тенге", "USD": "долларах США", "EUR": "евро"}[data.company.currency]
+        currency = in_phrase(data.company.currency)
         self.subtitle = (
             f"{data.company.name} · NC-Desicion · сгенерировано NC-AI · {self.now} · суммы в {currency}"
         )

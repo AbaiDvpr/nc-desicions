@@ -123,6 +123,7 @@ class Company(Base):
     currency: Mapped[str] = mapped_column(String(10))
     nds: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     description: Mapped[str] = mapped_column(String(1000), default="")
+    bp_data: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -289,6 +290,42 @@ class BpJob(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class BpImage(Base):
+    """Картинка клиента для бизнес-плана. Файл лежит в data/bp_images/{id}.jpg."""
+
+    __tablename__ = "bp_images"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    fin_model_id: Mapped[int] = mapped_column(
+        ForeignKey("fin_models.id", ondelete="CASCADE"), index=True
+    )
+    section: Mapped[str] = mapped_column(String(20), default="appendices")
+    caption: Mapped[str] = mapped_column(String(200), default="")
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    width: Mapped[int] = mapped_column(Integer, default=0)
+    height: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class BpProfile(Base):
+    """Сведения о компании для банковского плана: их нет в анкете финмодели."""
+
+    __tablename__ = "bp_profiles"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    fin_model_id: Mapped[int] = mapped_column(
+        ForeignKey("fin_models.id", ondelete="CASCADE"), unique=True
+    )
+    data: Mapped[dict] = mapped_column(JSONB, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class BpJobTask(Base):
     __tablename__ = "bp_job_tasks"
 
@@ -305,3 +342,18 @@ class BpJobTask(Base):
     error: Mapped[str] = mapped_column(Text, default="")
     review: Mapped[str] = mapped_column(Text, default="")
     review_status: Mapped[str] = mapped_column(String(20), default="")
+
+
+class AdminTask(Base):
+    """Карточка канбана в админке. Колонки: todo, doing, done."""
+
+    __tablename__ = "admin_tasks"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(200))
+    note: Mapped[str] = mapped_column(Text, default="")
+    column: Mapped[str] = mapped_column(String(20), default="todo", index=True)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

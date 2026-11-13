@@ -3,6 +3,7 @@ import { api } from '../api.js'
 
 const LINKS = [
   { to: '/', label: 'Главная', end: true },
+  { to: '/tasks', label: 'Задачи' },
   { to: '/users', label: 'Пользователи' },
   { to: '/models', label: 'Проекты' },
   { to: '/companies', label: 'Управленческий учёт' },

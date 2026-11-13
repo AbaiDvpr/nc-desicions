@@ -26,7 +26,27 @@ export const STEPS = [
   },
 ]
 
-export const CURRENCY_SIGNS = { kzt: '₸', usd: '$', eur: '€' }
+export const CURRENCY_SIGNS = {
+  kzt: '₸',
+  usd: '$',
+  eur: '€',
+  rub: '₽',
+  uzs: 'сум',
+  kgs: 'сом',
+  tjs: 'смн',
+  aed: 'Dh',
+}
+
+export const CURRENCY_CHOICES = [
+  ['kzt', '₸ Тенге (KZT)'],
+  ['usd', '$ Доллар (USD)'],
+  ['eur', '€ Евро (EUR)'],
+  ['rub', '₽ Рубль (RUB)'],
+  ['uzs', 'сум Узбекский сум (UZS)'],
+  ['kgs', 'сом Кыргызский сом (KGS)'],
+  ['tjs', 'смн Таджикский сомони (TJS)'],
+  ['aed', 'Dh Дирхам ОАЭ (AED)'],
+]
 
 export const LEGAL_FORMS = [
   [1, 'ИП'],
@@ -43,11 +63,7 @@ export const TAX_REGIMES = [
   [4, 'Упрощенная декларация'],
 ]
 
-export const CURRENCIES = [
-  ['kzt', 'тенге'],
-  ['usd', 'долл.USD'],
-  ['eur', 'EUR'],
-]
+export const CURRENCIES = CURRENCY_CHOICES
 
 export const TIME_PARAMS = [
   [1, 'по годам'],
@@ -321,6 +337,7 @@ export function initialForm() {
     variable_costs: [],
     variable_other: [],
     zero_cogs_confirmed: false,
+    owned_assets_value: '',
     salary: [],
     admin_expenses: ADMIN_PRESETS.map(([name, type]) => newExpense(name, type)),
     marketing_expenses: MARKETING_PRESETS.map((name) => newExpense(name)),

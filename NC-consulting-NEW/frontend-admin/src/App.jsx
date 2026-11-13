@@ -12,6 +12,7 @@ import Login from './pages/Login.jsx'
 import Models from './pages/Models.jsx'
 import Refills from './pages/Refills.jsx'
 import Tariffs from './pages/Tariffs.jsx'
+import TaskBoard from './pages/TaskBoard.jsx'
 import UserView from './pages/UserView.jsx'
 import Users from './pages/Users.jsx'
 
@@ -30,6 +31,7 @@ export default function App() {
         <Route path="/login" element={admin ? <Navigate to="/" replace /> : <Login onLogin={setAdmin} />} />
         <Route element={admin ? <AdminLayout admin={admin} onLogout={() => setAdmin(null)} /> : <Navigate to="/login" replace />}>
           <Route index element={<Home />} />
+          <Route path="tasks" element={<TaskBoard />} />
           <Route path="users" element={<Users />} />
           <Route path="users/:id" element={<UserView />} />
           <Route path="models" element={<Models />} />

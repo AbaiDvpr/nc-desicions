@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api.js'
+import CompanyBpProfile from '../components/CompanyBpProfile.jsx'
 import Toast from '../components/Toast.jsx'
 import { CURRENCIES, LEGAL_FORMS, TAX_REGIMES } from '../directory.js'
 
@@ -315,6 +316,8 @@ export default function CompanySettings() {
               </>
             )}
           </section>
+
+          <CompanyBpProfile companyId={id} />
         </div>
       )}
     </div>

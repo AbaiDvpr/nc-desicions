@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from app.currencies import prose
 from app.models import User
 
 # Ставки справочника. Жёлтые ячейки в файле — те же числа, их можно сверить.
@@ -878,7 +879,7 @@ def calculate(form: dict, options: CalcOptions | None = None) -> FemResult:
     seasonality = products[0]["season"] if products else [1.0] * 12
     result = FemResult(
         name=str(form.get("name") or "Финмодель"),
-        currency={"kzt": "тенге", "usd": "доллары США", "eur": "евро"}.get(form.get("currency"), "тенге"),
+        currency=prose(form.get("currency")),
         years=years,
         assumptions=assumptions,
         funding_rows=funding_rows,

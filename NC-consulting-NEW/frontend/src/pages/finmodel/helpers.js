@@ -1,4 +1,4 @@
-import { INVEST_FIELDS, OPERATING_KEYS } from './options.js'
+import { CURRENCY_SIGNS, INVEST_FIELDS, OPERATING_KEYS } from './options.js'
 
 export const OTHER = '__other'
 
@@ -238,6 +238,67 @@ export function capexPurchaseTotal(rows) {
   return named(rows).reduce((sum, row) => (row.already_owned ? sum : sum + num(row.price)), 0)
 }
 
+const OWNED_GROUPS = ['equipment', 'premises', 'smr', 'overhaul']
+
+/** Уже имеющиеся активы и их балансовая стоимость (как в реестре CAPEX: пусто — цена). */
+export function ownedAssets(form) {
+  const rows = OWNED_GROUPS.flatMap((key) => named(form[key] || [])).filter((row) => row.already_owned)
+  const book = rows.reduce((sum, row) => sum + (num(row.book_value) > 0 ? num(row.book_value) : num(row.price)), 0)
+  return { rows, book }
+}
+
+const CAPEX_GROUP_LABELS = {
+  equipment: 'Оборудование',
+  premises: 'Недвижимость',
+  smr: 'Работы',
+  overhaul: 'Материалы',
+}
+const STOCK_WORDS = /(товар|запас|сыр[ьь]|ингредиент|полуфабрикат|закуп)/i
+
+/** Не блокирует «Далее»: то, что стоит проверить до сборки Excel. */
+export function formWarnings(form) {
+  const warnings = []
+  for (const [key, label] of Object.entries(CAPEX_GROUP_LABELS)) {
+    for (const row of named(form[key] || [])) {
+      if (row.already_owned || !STOCK_WORDS.test(String(row.name))) continue
+      warnings.push({
+        step: 1,
+        text: `«${String(row.name).trim()}» (${label}, ${formatMoney(num(row.price), CURRENCY_SIGNS[form.currency] || '')}) похоже на товарный запас. В CAPEX он амортизируется и не попадает в оборотный капитал. Если это товар или сырьё для продажи — перенесите в «Первоначальный запас».`,
+      })
+    }
+  }
+  for (const row of named(form.premises || [])) {
+    const life = num(row.life_years)
+    if (row.already_owned || life <= 0 || life >= 15) continue
+    warnings.push({
+      step: 1,
+      text: `«${String(row.name).trim()}»: срок амортизации ${life} лет. Для зданий обычно 20–25 лет; короткий срок занижает прибыль и налоги ОУР.`,
+    })
+  }
+  const program = form.gov_program || {}
+  const share = String(program.detail || '').match(/(\d+(?:[.,]\d+)?)\s*%\s*от\s+номинальной/i)
+  const bank = num(form.loan_bank_rate)
+  const subsidy = num(form.loan_subsidy_rate) || Math.max(0, bank - num(form.loan_rate))
+  if ([2, 4].includes(Number(form.financing)) && share && bank > 0) {
+    const limit = (bank * Number(share[1].replace(',', '.'))) / 100
+    if (subsidy > limit + 0.005) {
+      warnings.push({
+        step: 1,
+        text: `Субсидия ${subsidy.toFixed(2)} п.п. больше лимита программы «${program.title || ''}» (${share[1]}% от ставки банка ${bank}% = ${limit.toFixed(2)} п.п.). Ставка клиента должна быть не ниже ${(bank - limit).toFixed(2)}%.`,
+      })
+    }
+  }
+  const staff = (form.salary || []).filter((row) => String(row.name || '').trim())
+  const products = (form.volume_sales || []).filter((row) => String(row.name || '').trim())
+  if (products.length && staff.length && !staff.some((row) => Number(row.industrial) === 1)) {
+    warnings.push({
+      step: 2,
+      text: 'Весь ФОТ отнесён к АУП. Если сотрудник делает продукт или оказывает услугу (повар, пекарь, мастер, оператор), отметьте его производственным — иначе себестоимость занижена, а валовая маржа завышена.',
+    })
+  }
+  return warnings
+}
+
 /** Сумма первоначального товарного запаса из списка на шаге «Продажи». */
 export function inventoryTotal(form) {
   return listTotal(form.inventory)
@@ -370,7 +431,7 @@ function stepIssue(form, index) {
     if (regime === 1 && !filled(form.tax_cit_rate) && form.tax_cit_rate !== 0) {
       return { message: 'Укажите ставку налога на прибыль / ИПН режима', anchor: '', field: 'tax_cit_rate' }
     }
-    if (regime === 1 && Number(form.nds) === 1 && !filled(form.vat_rate) && form.vat_rate !== 0) {
+    if (Number(form.nds) === 1 && !filled(form.vat_rate) && form.vat_rate !== 0) {
       return { message: 'Укажите ставку НДС', anchor: '', field: 'vat_rate' }
     }
     if (Number(form.legal_form) === 2 && regime === 1 && !filled(form.social_tax_rate) && form.social_tax_rate !== 0) {
@@ -1242,6 +1303,8 @@ export function toPayload(form) {
     smr: named(form.smr),
     overhaul: named(form.overhaul),
     inventory: named(form.inventory),
+    owned_assets_value:
+      ownedAssets(form).rows.length && String(form.owned_assets_value ?? '').trim() !== '' ? num(form.owned_assets_value) : null,
     variable_costs: form.variable_costs.filter((row) => row.product || row.cost_type || row.price !== ''),
     variable_other: named(form.variable_other),
     zero_cogs_confirmed: zeroCogsState(form).zero && Boolean(form.zero_cogs_confirmed),

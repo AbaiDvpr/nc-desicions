@@ -6,6 +6,7 @@ const COVERS = [
   { id: 'classic', label: 'Деловая обложка' },
   { id: 'investor', label: 'Обложка для инвестора' },
   { id: 'brief', label: 'Короткая обложка' },
+  { id: 'growth', label: 'График' },
 ]
 
 export default function BpTemplates() {

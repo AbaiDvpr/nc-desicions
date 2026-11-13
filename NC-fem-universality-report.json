@@ -11,7 +11,7 @@
         {
           "check": "build+calc",
           "ok": true,
-          "bytes": 192441
+          "bytes": 224908
         },
         {
           "check": "sheets",
@@ -53,7 +53,7 @@
         {
           "check": "investor_metrics",
           "ok": true,
-          "investor_npv": 15703958.9424407,
+          "investor_npv": 14017386.4375818,
           "mode": "with_investor"
         },
         {
@@ -73,7 +73,7 @@
         {
           "check": "project_npv_number",
           "ok": true,
-          "value": 25605628.468417
+          "value": 23854280.0865648
         },
         {
           "check": "capex_total_nonneg",
@@ -90,8 +90,8 @@
           "grant": 0.0,
           "row": 13
         },
-        "npv": 25605628.468417,
-        "irr": 2.33396350150076,
+        "npv": 23854280.0865648,
+        "irr": 2.19843218998929,
         "dscr_min": "Не применяется",
         "deficit": 0.0,
         "wacc": 0.1575,
@@ -116,7 +116,7 @@
         {
           "check": "build+calc",
           "ok": true,
-          "bytes": 349485
+          "bytes": 410018
         },
         {
           "check": "sheets",
@@ -191,21 +191,21 @@
         {
           "check": "fcff_vs_indep",
           "ok": true,
-          "fcff": -7348800000.0,
-          "indep": -7348800000.0,
+          "fcff": -8524608000.0,
+          "indep": -8524608000.0,
           "funding": 7395750000.0,
-          "capex": 6505000000.0
+          "capex": 7545800000.0
         },
         {
           "check": "fcff_excludes_funding",
           "ok": true,
           "funding": 7395750000.0,
-          "fcff": -7348800000.0
+          "fcff": -8524608000.0
         },
         {
           "check": "project_npv_number",
           "ok": true,
-          "value": 9880629084.01724
+          "value": 9580874769.96129
         },
         {
           "check": "capex_total_nonneg",
@@ -222,10 +222,10 @@
           "grant": 0.0,
           "row": 13
         },
-        "npv": 9880629084.01724,
-        "irr": 0.554472414523762,
-        "dscr_min": -4.87488616225064,
-        "deficit": 310603750.0,
+        "npv": 9580874769.96129,
+        "irr": 0.515698962584312,
+        "dscr_min": 0.993734861551832,
+        "deficit": 1486411750.0,
         "wacc": 0.13680960348849,
         "staff": {
           "total": 10,
@@ -248,7 +248,7 @@
         {
           "check": "build+calc",
           "ok": true,
-          "bytes": 205061
+          "bytes": 250992
         },
         {
           "check": "sheets",
@@ -317,7 +317,7 @@
         {
           "check": "investor_metrics",
           "ok": true,
-          "investor_npv": 137110122.036379,
+          "investor_npv": 114239618.882322,
           "mode": "with_investor"
         },
         {
@@ -337,7 +337,7 @@
         {
           "check": "project_npv_number",
           "ok": true,
-          "value": 238171307.021427
+          "value": 201080303.568245
         },
         {
           "check": "capex_total_nonneg",
@@ -354,9 +354,9 @@
           "grant": 0.0,
           "row": 13
         },
-        "npv": 238171307.021427,
-        "irr": 1.1345577621824,
-        "dscr_min": 0.445986761942319,
+        "npv": 201080303.568245,
+        "irr": 1.00704900866486,
+        "dscr_min": 1.52180376090496,
         "deficit": 0.0,
         "wacc": 0.192336201553591,
         "staff": {
@@ -380,7 +380,7 @@
         {
           "check": "build+calc",
           "ok": true,
-          "bytes": 371862
+          "bytes": 433968
         },
         {
           "check": "sheets",
@@ -422,27 +422,27 @@
         {
           "check": "investor_metrics",
           "ok": true,
-          "investor_npv": -1834578406.36773,
+          "investor_npv": -1918303899.5029,
           "mode": "with_investor"
         },
         {
           "check": "fcff_vs_indep",
           "ok": true,
-          "fcff": -4570600000.0,
-          "indep": -4570600000.0,
+          "fcff": -5301896000.0,
+          "indep": -5301896000.0,
           "funding": 4587540000.0,
-          "capex": 4547000000.0
+          "capex": 5274520000.0
         },
         {
           "check": "fcff_excludes_funding",
           "ok": true,
           "funding": 4587540000.0,
-          "fcff": -4570600000.0
+          "fcff": -5301896000.0
         },
         {
           "check": "project_npv_number",
           "ok": true,
-          "value": -1906594395.32943
+          "value": -2409496132.39905
         },
         {
           "check": "capex_total_nonneg",
@@ -459,10 +459,10 @@
           "grant": 0.0,
           "row": 13
         },
-        "npv": -1906594395.32943,
-        "irr": 0.0602217021371954,
+        "npv": -2409496132.39905,
+        "irr": 0.0445963691117133,
         "dscr_min": "Не применяется",
-        "deficit": 0.0,
+        "deficit": 714356000.0,
         "wacc": 0.18758836980168,
         "staff": {
           "total": 9,
@@ -485,7 +485,7 @@
         {
           "check": "build+calc",
           "ok": true,
-          "bytes": 425301
+          "bytes": 494475
         },
         {
           "check": "sheets",
@@ -578,7 +578,7 @@
         {
           "check": "project_npv_number",
           "ok": true,
-          "value": 320562631.413791
+          "value": 265218806.774717
         },
         {
           "check": "capex_total_nonneg",
@@ -595,10 +595,10 @@
           "grant": 0.0,
           "row": 8
         },
-        "npv": 320562631.413791,
-        "irr": 0.519936195473664,
-        "dscr_min": -0.474787427724256,
-        "deficit": 15042216.4834327,
+        "npv": 265218806.774717,
+        "irr": 0.465444575639409,
+        "dscr_min": -0.166465469594695,
+        "deficit": 16778448.4002328,
         "wacc": 0.164192759295499,
         "staff": {
           "total": 6,
@@ -621,7 +621,7 @@
         {
           "check": "build+calc",
           "ok": true,
-          "bytes": 331170
+          "bytes": 391304
         },
         {
           "check": "sheets",
@@ -669,21 +669,21 @@
         {
           "check": "fcff_vs_indep",
           "ok": true,
-          "fcff": -4428600000.0,
-          "indep": -4428600000.0,
+          "fcff": -5137176000.0,
+          "indep": -5137176000.0,
           "funding": 4451000000.0,
-          "capex": 4386000000.0
+          "capex": 5087760000.0
         },
         {
           "check": "fcff_excludes_funding",
           "ok": true,
           "funding": 4451000000.0,
-          "fcff": -4428600000.0
+          "fcff": -5137176000.0
         },
         {
           "check": "project_npv_number",
           "ok": true,
-          "value": -144255500.264181
+          "value": -2674566174.35727
         },
         {
           "check": "capex_total_nonneg",
@@ -700,11 +700,11 @@
           "grant": 4451000000.0,
           "row": 13
         },
-        "npv": -144255500.264181,
-        "irr": -0.00706054442539255,
+        "npv": -2674566174.35727,
+        "irr": -0.0133707724013716,
         "dscr_min": "Не применяется",
-        "deficit": 489347.199999973,
-        "wacc": 0,
+        "deficit": 692130950.0,
+        "wacc": 0.1575,
         "staff": {
           "total": 9,
           "production": 4,

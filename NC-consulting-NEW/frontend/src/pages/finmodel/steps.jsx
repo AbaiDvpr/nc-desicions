@@ -33,8 +33,10 @@ import {
   yearsBetween,
   fullLoadAtStart,
   zeroCogsState,
+  ownedAssets,
 } from './helpers.js'
 import {
+  CURRENCY_CHOICES,
   CURRENCY_SIGNS,
   EXPENSE_TYPES,
   INVEST_FIELDS,
@@ -760,12 +762,6 @@ const EXPENSE_TABS = [
   ['land_tax', 'Земельный налог'],
 ]
 
-const CURRENCY_CHOICES = [
-  ['kzt', '₸ Тенге (KZT)'],
-  ['usd', '$ Доллар (USD)'],
-  ['eur', '€ Евро (EUR)'],
-]
-
 const SCHEDULE_CHOICES = [
   [1, '5 дней в неделю'],
   [2, '6 дней в неделю'],
@@ -876,7 +872,7 @@ export function CompanyStep({ form, set, rateDefaults }) {
   const months = planningMonths(form.planning_from, form.planning_to)
   const regime = Number(form.tax_regime)
   const too = Number(form.legal_form) === 2
-  const vatOn = regime === 1 && Number(form.nds) === 1
+  const vatOn = Number(form.nds) === 1
   const rates = rateDefaults || {}
 
   const simplifiedDefault = too
@@ -1012,7 +1008,7 @@ export function CompanyStep({ form, set, rateDefaults }) {
             </Field>
           ) : null}
           {vatOn ? (
-            <Field label="НДС" required field="vat_rate" hint={`Дефолт ${rates.vat_rate ?? 16}%. В ДДС при плательщике НДС.`}>
+            <Field label="НДС" required field="vat_rate" hint={`Дефолт ${rates.vat_rate ?? 16}%. Цены и закупки в анкете — без НДС; НДС добавляется в ДДС на любом налоговом режиме.`}>
               <NumberInput
                 required
                 max={100}
@@ -1588,6 +1584,7 @@ export function SalesStep({ form, set, notify }) {
     notify?.('ok', `Ставка банка ${bank}%: базовая НБРК ${nbk.rate}% на ${nbk.as_of} + ${spread} п.п.`)
   }
   const projectStart = form.planning_from || ''
+  const owned = ownedAssets(form)
   const assetTotal = ASSET_TABS.reduce((sum, [key]) => sum + (form[key] || []).reduce((part, item) => part + num(item.price), 0), 0)
 
   return (
@@ -2019,6 +2016,21 @@ export function SalesStep({ form, set, notify }) {
             sign={sign}
             projectStart={projectStart}
           />
+        )}
+        {owned.rows.length > 0 && (
+          <div className="owned-value">
+            <Field
+              label="Согласованная оценка уже имеющихся активов"
+              hint={`Для доли инвестора и оценки всего бизнеса. Пусто — балансовая ${formatMoney(owned.book, sign)}, в Excel будет пометка «не подтверждена». На оценку новых инвестиций не влияет`}
+            >
+              <NumberInput
+                value={form.owned_assets_value ?? ''}
+                suffix={sign}
+                placeholder={String(owned.book || 0)}
+                onChange={(v) => set('owned_assets_value', v)}
+              />
+            </Field>
+          </div>
         )}
       </SetupRow>
     </div>

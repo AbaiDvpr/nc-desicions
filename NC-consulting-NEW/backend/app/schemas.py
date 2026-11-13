@@ -3,6 +3,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, EmailStr, Field
 
+from app.currencies import CabinetCode, ModelCode
+
 
 def _empty_to_zero(value):
     return 0 if value in ("", None) else value
@@ -153,7 +155,7 @@ class CompanyIn(BaseModel):
     target_audience: LongText = ""
     advantages: LongText = ""
 
-    currency: Literal["KZT", "USD", "EUR"] = "KZT"
+    currency: ModelCode = "KZT"
     start_date: Month = ""
     horizon_months: int = Field(default=36, ge=1, le=240)
     tax_regime: Literal["general", "simplified", "retail"] = "general"
@@ -377,7 +379,7 @@ class CabinetCompanyIn(BaseModel):
     name: str = Field(min_length=3, max_length=256)
     legal_form: Literal["1", "2"]
     tax_regime: Literal["1", "4"]
-    currency: Literal["kzt", "usd", "eur"]
+    currency: CabinetCode
     nds: bool
     description: str = Field(default="", max_length=1000)
 
